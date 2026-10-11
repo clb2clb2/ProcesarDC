@@ -1,0 +1,269 @@
+PROCESO DE COMPARACION JP vs JG Y CREACION DE MARCADORES
+
+Objetivo del documento
+- Explicar con detalle la logica funcional para comparar un PDF de Justificantes de Pago (JP) con un Excel de Justificantes de Gasto (JG).
+- Explicar como el usuario revisa y corrige resultados.
+- Explicar como se asigna un marcador por pagina del PDF usando el JG final.
+- Este documento omite intencionadamente la carga de carpetas y la exportacion de resultados.
+
+Alcance funcional (solo lo pedido)
+1) Entrada A: un PDF JP con una transferencia por pagina.
+2) Entrada B: un Excel con los datos de JG.
+3) Proceso de analisis y matching pagina JP <-> fila Excel.
+4) Revision/ajuste manual por parte del usuario.
+5) Generacion de PDF con marcadores: un marcador por pagina.
+
+
+1. Modelo de datos interno
+
+1.1 Datos por pagina PDF (JP)
+Cada pagina se convierte en una estructura con:
+- source_name: nombre del archivo PDF de origen.
+- page_number: numero de pagina (1..N).
+- fecha: fecha de operacion detectada en el JP.
+- importe: importe ordenado del JP (Decimal con 2 decimales, si existe).
+- factura: numero/referencia de factura extraido del bloque de concepto.
+- beneficiario: beneficiario extraido del texto JP.
+- concepto: descripcion/concepto extraido del JP.
+
+1.2 Datos por fila Excel (JG)
+Cada fila valida se convierte en:
+- row_number: fila original en Excel.
+- jg: identificador original de justificante en Excel.
+- fecha: fecha de pago normalizada.
+- importe_total: importe total.
+- importe_retencion: retencion.
+- factura: factura proveedor normalizada.
+- beneficiario: nombre proveedor normalizado.
+- concepto: descripcion normalizada.
+- importe_neto (calculado): importe_total - importe_retencion, con 2 decimales.
+
+
+2. Extraccion de datos desde JP (pagina a pagina)
+
+2.1 Normalizacion inicial del texto de pagina
+- Se reemplazan saltos de linea por espacios.
+- Se colapsan espacios repetidos.
+- Se obtiene una linea larga para aplicar regex de forma robusta.
+
+2.2 Campos extraidos por regex
+- Importe ordenado: patron tipo "Importe ordenado: ... EUR".
+- Fecha operacion: patron dd-mm-aaaa.
+- Beneficiario: bloque entre "EUR>>" y "POR CUENTA DE:".
+- Bloque de concepto: todo lo que sigue a "CONCEPTO:".
+
+2.3 Separacion Factura / Concepto dentro de "CONCEPTO"
+- Si empieza por "Factura:", se intenta separar en dos partes usando " - ".
+- Regla principal: escoger el separador cuyo lado derecho empieza por 4 letras (sin digitos), para evitar cortes incorrectos.
+- Fallback: si no se cumple esa regla, se usa el primer corte clasico con " - ".
+- Si no hay estructura reconocible, factura puede quedar vacia y concepto conserva texto util.
+
+
+3. Lectura y validacion del Excel
+
+3.1 Deteccion de cabecera
+- Se busca la fila que contenga simultaneamente cabeceras equivalentes a:
+  - "n reg. justific."
+  - "fecha pago"
+- La normalizacion de cabeceras elimina acentos, unifica mayusculas y espacios.
+
+3.2 Columnas requeridas
+Se mapean como obligatorias:
+- n reg. justific.
+- fecha pago
+- importe total
+- importe retencion
+- factura proveedor
+- nombre proveedor
+- descripcion
+
+3.3 Filtro de filas validas
+Una fila solo entra al matching si cumple:
+- JG con patron esperado de Sorolla: 20xx/0.... (formato restringido por regex).
+- Fecha valida en formato final dd-mm-aaaa.
+- Importe total y retencion convertibles a Decimal.
+- Beneficiario no vacio.
+- Concepto no vacio.
+
+3.4 Estandarizacion de valores
+- Fechas: se aceptan varios formatos de entrada y se pasan a dd-mm-aaaa.
+- Decimales: se limpian "EUR", separadores y se cuantiza a 2 decimales.
+- Texto: mayusculas, sin acentos, espacios normalizados.
+
+
+4. Reglas de matching exacto JP vs Excel
+
+4.1 Firma normalizada por campo
+Para comparar robustamente se construyen firmas:
+- Fecha: texto normalizado.
+- Importe: Decimal exacto a 2 decimales.
+- Factura: sin espacios ni guion bajo.
+- Beneficiario: sin espacios y sin '&', truncado a 25 caracteres.
+- Concepto: solo alfanumerico, sin espacios/simbolos, truncado a 75 caracteres.
+  - Antes se corrigen cortes artificiales de palabras del OCR/extraccion PDF.
+
+4.2 Condicion de match exacto
+Una pagina JP coincide con una fila Excel solo si TODOS estos campos coinciden:
+- fecha
+- importe_neto (importe_total - retencion)
+- factura
+- beneficiario
+- concepto (firma)
+
+4.3 Resultado del matching por pagina
+Para cada pagina JP puede ocurrir:
+- Caso A: 1 coincidencia exacta.
+- Caso B: 0 coincidencias exactas.
+- Caso C: multiples coincidencias exactas.
+
+
+5. Heuristica de "JG probable" desde el propio JP
+
+Se intenta inferir un JG probable desde el texto JP:
+- Se toma el anio (2 digitos) desde la fecha de la pagina.
+- Busqueda 1 (prioritaria): en factura, patron numerico tipo "numero-aa".
+- Busqueda 2: en el inicio del concepto, patron "(numero-aa)".
+
+Salida de la heuristica:
+- probable_jg: valor sugerido (ej. 12345-26) o vacio.
+- probable_jg_source: origen de la inferencia (factura o concepto).
+
+
+6. Construccion de filas de resultado principal
+
+Cada pagina JP produce una fila en la tabla principal con:
+- datos JP visibles (archivo, pagina, fecha, importe, factura, beneficiario, concepto)
+- jg (asignado visible para usuario)
+- jg_base (base interna)
+- jg_candidates (candidatos para revision)
+- match_status (found, not_found, dubious)
+- row_color (verde/rojo/normal)
+- mismatch_details (detalle de discrepancias para casos proximos)
+
+6.1 Caso A: exactamente 1 match
+- El JG matched se normaliza al formato corto "numero-aa".
+- Si probable_jg == matched_jg:
+  - se considera muy consistente (fila verde).
+  - jg_candidates se vacia.
+- Si probable_jg existe, es distinto y viene de concepto:
+  - se mantiene matched_jg como base.
+  - probable_jg se muestra como candidato.
+  - fila en rojo para revision.
+- En otros casos:
+  - jg_base = matched_jg.
+  - fila normal.
+
+6.2 Caso B: 0 matches exactos
+- jg_base queda vacio.
+- Se buscan candidatos cercanos permitiendo hasta 2 discrepancias de campo.
+- Si hay candidatos cercanos:
+  - se muestran solo los de menor numero de discrepancias.
+  - se guarda detalle de hasta 2 discrepancias para la vista de detalle.
+- match_status = not_found.
+- fila en rojo.
+
+6.3 Caso C: multiples matches
+- Se listan todos los JG candidatos.
+- Si probable_jg esta dentro de los matches, se usa como jg_base.
+- Si probable_jg existe pero no esta en los matches, se agrega a candidatos.
+- match_status = dubious.
+- fila en rojo.
+
+
+7. Revision por el usuario (fase humana)
+
+7.1 Acciones de revision disponibles
+- Doble clic sobre una fila:
+  - permite asignar JG manual.
+  - admite limpiar asignacion dejando vacio.
+- Clic sobre la columna de accion ("<-"):
+  - copia automaticamente el primer candidato de jg_candidates a JG asignado.
+
+7.2 Normalizacion de entrada manual de JG
+Si el usuario escribe:
+- "AAAA/NNNN..." -> se convierte a "numero-aa".
+- "numero-aa" -> se conserva formato normalizado.
+- otro formato -> se conserva tal cual tras trim/uppercase.
+
+7.3 Prioridad entre JG base y JG manual
+Para cada pagina, el JG efectivo se calcula asi:
+- Si existe asignacion manual, manda la manual.
+- Si no, se usa jg_base.
+
+Este JG efectivo es el que se usa para:
+- estadisticas de encontrados.
+- deteccion de duplicados.
+- construccion de marcadores.
+
+7.4 Alertas visuales y control de calidad
+- Filas rojas: incidencias (no encontrados, dudosos o discrepancias relevantes).
+- Filas verdes: alta confianza (coincidencia exacta + probable consistente).
+- Se calcula y muestra alerta de JG asignados duplicados.
+- Hay detalle de discrepancias JP/JG para ayudar al analisis humano.
+
+
+8. Preparacion para marcadores
+
+8.1 Precondiciones
+- Debe existir PDF cargado.
+- Deben existir resultados de analisis.
+
+8.2 Control de duplicados antes de generar
+- Si hay JG efectivos repetidos, se muestra aviso con ejemplos.
+- El usuario decide si continuar o cancelar.
+- Si cancela, no se crean marcadores.
+
+8.3 Mapa pagina -> nombre de marcador
+Se crea un diccionario por archivo PDF:
+- clave: numero de pagina (1-based)
+- valor: JG efectivo
+Solo se incluyen paginas con JG efectivo no vacio.
+
+
+9. Creacion del PDF con marcadores
+
+9.1 Escritura del nuevo PDF
+- Se lee el PDF origen.
+- Se copian todas las paginas al writer.
+- Se recorre cada pagina para anadir un bookmark.
+
+9.2 Nombre del bookmark por pagina
+Para cada pagina i:
+- Si existe JG efectivo para i: bookmark = ese JG.
+- Si no existe: bookmark = "NO ENCONTRADO".
+
+Resultado: siempre hay un marcador por pagina, con nombre de JG o "NO ENCONTRADO".
+
+9.3 Cancelacion/progreso
+- Durante la creacion se comprueba si el usuario pidio cancelar.
+- Si se cancela antes de terminar, se aborta la escritura final.
+- Se informa progreso de copia e indexacion de paginas.
+
+
+10. Resumen operativo (version corta)
+
+1) Extraer datos por pagina JP.
+2) Leer y filtrar filas Excel validas.
+3) Comparar con matching exacto por 5 campos normalizados.
+4) Clasificar cada pagina en found / not_found / dubious.
+5) Sugerir candidatos cercanos y JG probable cuando aplique.
+6) Permitir revision humana (manual o copia de candidato).
+7) Calcular JG efectivo final por pagina.
+8) Generar marcador por pagina con JG efectivo; si no hay, "NO ENCONTRADO".
+
+
+11. Restricciones y decisiones de negocio importantes
+
+- El matching exacto exige coincidencia total de 5 campos.
+- El importe se compara con neto Excel (total - retencion), no con total bruto.
+- La comparacion de concepto se hace con firma alfanumerica truncada.
+- La comparacion de beneficiario es agresivamente normalizada y truncada.
+- Los duplicados de JG no bloquean de forma absoluta: el usuario decide continuar.
+- El marcador final usa JG efectivo (manual tiene prioridad sobre base automatica).
+
+
+12. Lo que este documento NO cubre
+
+- Proceso de carga masiva por carpeta JP (detalles omitidos por requerimiento).
+- Exportacion de resultados a Excel (omitido por requerimiento).
+- Detalles de UI no relacionados con comparacion/revision/marcadores.

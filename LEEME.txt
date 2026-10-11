@@ -1,0 +1,85 @@
+PROCESARDC - GUIA RAPIDA DE USO
+
+Ejecutable
+- Ruta: dist\ProcesarDC.exe
+
+Que necesito antes de empezar
+- Uno o varios PDFs origen.
+- De esos PDFs se usan sus marcadores para extraer secciones.
+- Si un PDF origen empieza por DC/CJ/RT seguido inmediatamente de uno o varios numeros, se ignoran sus marcadores internos y se trata como archivo directo. Lo que venga despues del bloque numerico se permite y se ignora para obtener el numero.
+- Debe existir exactamente una seccion DC#### y una seccion CJ####.
+- Debe existir al menos una seccion con marcador numerico (JG).
+- Las secciones con marcador no numerico (incluyendo RT#### u otros nombres) tambien se extraen.
+- Modo normal: un PDF de Justificantes de Pago (JP) y un Excel de datos de Justificantes de Gasto.
+- Modo "DC sin justificantes de pago": no se necesita JP ni Excel.
+
+Modo opcional sin justificantes de pago
+- En la parte superior hay un checkbox:
+  "DC sin justificantes de pago (tarjetas o pago manual)"
+- Si se marca:
+  - No se exige cargar JP ni Excel.
+  - Se desactiva el flujo de Analizar.
+  - Al procesar, solo se copian/renombran PDFs origen y se divide el PDF JG por marcadores.
+  - Si no hay ano detectado, la app solicita confirmarlo y propone por defecto el ano actual.
+
+Pasos de trabajo
+1. Abra la aplicacion (doble clic en ProcesarDC.exe).
+2. Cargue los bloques de entrada segun el modo:
+   - PDFs origen
+   - Modo normal: PDF Justif. Pago + Excel datos Justif. Gastos
+   - Modo sin justificantes: no hace falta cargar JP ni Excel
+   (tambien puede arrastrar y soltar)
+3. Revise la fila de Datos detectados.
+4. Si esta en modo normal, pulse Analizar.
+5. Revise las pestanas (modo normal):
+   - Resultado del analisis
+   - Filas Excel no asignadas
+6. Corrija asignaciones si hace falta (modo normal):
+   - Doble clic en una fila para asignar JG manualmente.
+   - Use la flecha en JG candidatos para copiar candidato a JG asignado.
+7. Elija el Tipo de Documento Contable.
+8. Pulse Procesar y seleccione carpeta destino.
+
+Requisitos obligatorios para poder procesar
+- Debe haber exactamente una seccion DC y con numero mayor que 0.
+- Debe haber exactamente una seccion CJ y con numero mayor que 0.
+- JG debe ser valido (sin X).
+- No puede haber conflictos de nombres entre secciones extraidas y/o archivos directos.
+- Modo normal:
+  - Todas las paginas JP deben tener un JG asignado.
+  - No puede haber dos paginas JP con el mismo JG asignado.
+  - Cada JG asignado debe existir en los marcadores del PDF JG.
+- Modo sin justificantes:
+  - No se valida JP ni Excel.
+  - Si no hay ano detectado, se pide al procesar.
+
+Reglas del archivo JG
+- Los marcadores numericos se tratan como JG (seccion por marcador).
+- Los marcadores no numericos se extraen como PDFs independientes.
+- Si hay marcadores duplicados (mismo nombre o mismo JG numerico), se rechaza.
+
+Que genera la aplicacion
+- Crea una carpeta con formato:
+  AAAADDDDDDDDD (TIPO)
+  Ejemplo: 2025000009108 (REMESA INV)
+- No copia los PDFs origen contenedor cuando tienen marcadores; extrae sus secciones.
+- Renombra DC y CJ con los numeros indicados.
+- Las secciones RT y otros nombres no numericos se guardan con el nombre del marcador.
+- Las secciones numericas se guardan como JG<numero>.pdf.
+- Modo normal: anade cada pagina JP al final del JG correspondiente.
+- Modo sin justificantes: no anade paginas JP.
+
+Mensajes frecuentes y que hacer
+- "No se ha cargado un Documento Contable valido":
+  revise el archivo DC y el campo DC.
+- "No se ha cargado un Cuenta Justificativa valida":
+  revise el archivo CJ y el campo CJ.
+- "No se han cargado Justificantes de Gasto validos...":
+  revise el archivo JG y sus marcadores.
+- "Hay Justificantes de Pago a los que no se ha asignado un numero de JG":
+  complete asignaciones en la tabla.
+- "Hay varias paginas de JP asignadas al mismo JG":
+  elimine duplicados de JG asignado.
+
+Nota
+- Si en destino ya existen archivos con el mismo nombre, la app pedira confirmacion para sobrescribir.

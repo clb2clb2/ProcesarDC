@@ -1,0 +1,24 @@
+# Entorno virtual
+.venv/
+venv/
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Artefactos de build
+build/
+dist/
+*.egg-info/
+
+# Editor y sistema
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.DS_Store
+Thumbs.db
