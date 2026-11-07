@@ -1,5 +1,20 @@
 # ProcesarDC - Guion de pruebas con archivos reales de ej
 
+## Tests automaticos
+
+Los escenarios A-E y el cruce JP/Excel estan cubiertos por tests en `tests/`:
+
+    pip install -r requirements-dev.txt
+    python -m pytest
+
+- El escenario E se omite si no existe `ej/fixtures/origen_contenedor_normal_completo.pdf`
+  (o la ruta indicada en la variable de entorno `PROCESARDC_PDF_COMPLETO`).
+- `tests/datos/cruce_esperado.json` fija el resultado del analisis para los JP y Excel de `ej/`.
+  Si se cambian las reglas del cruce a proposito, se regenera con
+  `ACTUALIZAR_ESPERADOS=1 python -m pytest tests/test_cruce.py` y se revisa el diff.
+
+Los pasos manuales de abajo siguen sirviendo para probar la interfaz.
+
 Esta guia usa archivos ya disponibles en la carpeta ej y fixtures generados en ej/fixtures.
 
 ## Archivos a usar
@@ -10,6 +25,14 @@ Origen:
 - ej/fixtures/origen_conflicto_texto_duplicado.pdf
 - ej/fixtures/origen_conflicto_jg_duplicado.pdf
 - ej/fixtures/ANEXO.pdf
+
+Nota: `ej/JG 5270-7063(25+1).pdf` y `ej/fixtures/origen_contenedor_normal_completo.pdf`
+no estan en el repositorio por tamano (~75 MB cada uno). Para preparar el escenario E:
+
+1. Recuperar el PDF de JG del historial:
+   `git show "4fe4e5d:ej/JG 5270-7063(25+1).pdf" > "ej/JG 5270-7063(25+1).pdf"`
+   (desde Git Bash o `cmd`; en PowerShell 5.1 la redireccion corrompe el binario).
+2. Regenerar los fixtures: `python tools/generar_fixtures_pruebas.py`
 
 JP y Excel:
 - ej/JP536.pdf

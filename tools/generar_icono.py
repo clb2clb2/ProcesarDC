@@ -1,7 +1,7 @@
 from pathlib import Path
 import struct
 
-out_path = Path("c:/Proyectos-Github/ProcesarDC/assets/procesardc.ico")
+out_path = Path(__file__).resolve().parent.parent / "assets" / "procesardc.ico"
 out_path.parent.mkdir(parents=True, exist_ok=True)
 
 width = 16

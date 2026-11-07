@@ -141,7 +141,7 @@ Cada pagina JP produce una fila en la tabla principal con:
 - mismatch_details (detalle de discrepancias para casos proximos)
 
 6.1 Caso A: exactamente 1 match
-- El JG matched se normaliza al formato corto "numero-aa".
+- El JG matched se normaliza a solo el numero ("2026/000000005270" -> "5270").
 - Si probable_jg == matched_jg:
   - se considera muy consistente (fila verde).
   - jg_candidates se vacia.
@@ -181,9 +181,10 @@ Cada pagina JP produce una fila en la tabla principal con:
 
 7.2 Normalizacion de entrada manual de JG
 Si el usuario escribe:
-- "AAAA/NNNN..." -> se convierte a "numero-aa".
-- "numero-aa" -> se conserva formato normalizado.
+- "AAAA/NNNN...", "numero-aa" o "0NNNN" -> se deja solo el numero sin ceros a la izquierda (ej. "5270").
+- otro formato que empiece por digitos -> se quedan los digitos iniciales.
 - otro formato -> se conserva tal cual tras trim/uppercase.
+- Los duplicados se detectan por el numero de JG, sea cual sea la forma en que se escribio.
 
 7.3 Prioridad entre JG base y JG manual
 Para cada pagina, el JG efectivo se calcula asi:

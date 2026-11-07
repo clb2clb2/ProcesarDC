@@ -14,6 +14,11 @@ build/
 dist/
 *.egg-info/
 
+# PDFs de prueba grandes (~75 MB): se recuperan del historial o se regeneran
+# con tools/generar_fixtures_pruebas.py
+ej/JG 5270-7063(25+1).pdf
+ej/fixtures/origen_contenedor_normal_completo.pdf
+
 # Editor y sistema
 .vscode/*
 !.vscode/settings.json
