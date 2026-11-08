@@ -18,11 +18,13 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pypdf import PdfReader
 
-from . import cruce, salida
+from . import cruce, salida, tema
 from .lectura_excel import leer_excel
 from .modelos import Estado, ExcelRowData, PdfPageData, Resaltado, ResultadoCruce
 from .normalizacion import formatear_decimal, normalizar_jg_manual
+from .ordenacion import FECHA, IMPORTE, NUMERO, TEXTO
 from .secciones import EscaneoOrigen, escanear_origen, validar_carga
+from .tabla import OrdenTabla
 from .validacion import anio_detectado, es_anio_valido, validar_para_procesar
 
 try:
@@ -71,6 +73,7 @@ class App(BaseTk):
 
         self.active_job: str | None = None
 
+        self.paleta = tema.aplicar(self)
         self._build_ui()
         self._refresh_meta_fields()
         self._update_action_buttons()
@@ -154,7 +157,7 @@ class App(BaseTk):
 
         vcmd_numbers = (self.register(self._validate_numeric), "%P")
 
-        self.entry_map: dict[str, tk.Entry] = {}
+        self.entry_map: dict[str, ttk.Entry] = {}
 
         self._add_field(fields, "AÑO", "anio", 0, editable=False)
         self._add_field(fields, "DC", "dc", 1, validate=vcmd_numbers)
@@ -175,7 +178,9 @@ class App(BaseTk):
         actions.columnconfigure(1, weight=1)
         actions.columnconfigure(2, weight=0)
 
-        self.btn_analyze = ttk.Button(actions, text="Analizar", command=self.analyze)
+        self.btn_analyze = ttk.Button(
+            actions, text="Analizar", command=self.analyze, style=tema.ESTILO_BOTON_PRINCIPAL
+        )
         self.btn_analyze.grid(row=0, column=0, sticky="w")
 
         self.btn_reset = ttk.Button(actions, text="Reiniciar", command=self.confirm_reset_state)
@@ -205,12 +210,27 @@ class App(BaseTk):
 
         self.tree_main = self._build_table(tab_main, columns)
         self.tree_main.column("jg_apply", anchor="center", width=34, stretch=False)
-        self.tree_main.tag_configure("incidencia", foreground="red")
-        self.tree_main.tag_configure("probable_ok", foreground="green")
-        self.tree_main.tag_configure("jg_duplicado", foreground="white", background="red")
+        self.tree_main.tag_configure("incidencia", foreground=self.paleta.error)
+        self.tree_main.tag_configure("probable_ok", foreground=self.paleta.ok)
+        self.tree_main.tag_configure(
+            "jg_duplicado", foreground=self.paleta.duplicado_texto, background=self.paleta.duplicado_fondo
+        )
         self.tree_main.bind("<Double-1>", self._on_main_double_click)
         self.tree_main.bind("<<TreeviewSelect>>", self._on_main_selection_changed)
         self.tree_main.bind("<ButtonRelease-1>", self._on_main_click_action)
+        self.orden_main = OrdenTabla(
+            self.tree_main,
+            {
+                "page": NUMERO,
+                "fecha": FECHA,
+                "importe": IMPORTE,
+                "factura": TEXTO,
+                "beneficiario": TEXTO,
+                "concepto": TEXTO,
+                "jg": TEXTO,
+                "jg_candidates": TEXTO,
+            },
+        )
 
         self.tree_unassigned_excel = self._build_table(
             tab_unassigned_excel,
@@ -222,6 +242,17 @@ class App(BaseTk):
                 ("beneficiario", "Beneficiario", 280),
                 ("concepto", "Concepto", 560),
             ],
+        )
+        self.orden_excel = OrdenTabla(
+            self.tree_unassigned_excel,
+            {
+                "jg": TEXTO,
+                "fecha": FECHA,
+                "importe_neto": IMPORTE,
+                "factura": TEXTO,
+                "beneficiario": TEXTO,
+                "concepto": TEXTO,
+            },
         )
 
         detail_frame = ttk.LabelFrame(tab_main, text="Detalle de discordancias", padding=(8, 6))
@@ -253,7 +284,9 @@ class App(BaseTk):
         self.cmb_doc_type.pack(side=tk.LEFT, padx=(8, 8))
         self.cmb_doc_type.current(0)
 
-        self.btn_process = ttk.Button(process_frame, text="Procesar", command=self.process_documents)
+        self.btn_process = ttk.Button(
+            process_frame, text="Procesar", command=self.process_documents, style=tema.ESTILO_BOTON_PRINCIPAL
+        )
         self.btn_process.pack(side=tk.LEFT)
         self._update_unassigned_tab_title()
 
@@ -266,24 +299,45 @@ class App(BaseTk):
             )
 
     def _build_drop_zone(self, parent: ttk.Frame, title: str, col: int) -> tk.Label:
+        # Tarjeta plana con borde fino; se ilumina al arrastrar un fichero encima.
         label = tk.Label(
             parent,
             text=title,
-            relief="groove",
-            bd=2,
+            font=tema.FUENTE,
+            relief="flat",
+            bd=0,
             padx=10,
-            pady=14,
+            pady=18,
             justify="center",
             anchor="center",
-            bg="#f2f2f2",
+            highlightthickness=1,
         )
+        self._resaltar_zona(label, False)
         label.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 3, 0 if col == 2 else 3))
         return label
 
-    @staticmethod
-    def _wire_drop(widget: tk.Label, handler) -> None:
+    def _resaltar_zona(self, zona: tk.Label, activa: bool) -> None:
+        p = self.paleta
+        fondo, borde = (p.zona_activa_fondo, p.zona_activa_borde) if activa else (p.zona_fondo, p.zona_borde)
+        zona.configure(bg=fondo, fg=p.texto, highlightbackground=borde, highlightcolor=borde)
+
+    def _wire_drop(self, widget: tk.Label, handler) -> None:
+        def entrar(event):
+            self._resaltar_zona(widget, True)
+            return event.action
+
+        def salir(event):
+            self._resaltar_zona(widget, False)
+            return event.action
+
+        def soltar(event):
+            self._resaltar_zona(widget, False)
+            return handler(event)
+
         widget.drop_target_register(DND_FILES)
-        widget.dnd_bind("<<Drop>>", handler)
+        widget.dnd_bind("<<DropEnter>>", entrar)
+        widget.dnd_bind("<<DropLeave>>", salir)
+        widget.dnd_bind("<<Drop>>", soltar)
 
     def _add_field(
         self,
@@ -299,13 +353,13 @@ class App(BaseTk):
         ttk.Label(parent, text=label).grid(row=0, column=col * 2, sticky="w", padx=(0, 4))
 
         state = "normal" if editable else "readonly"
-        entry = tk.Entry(
+        entry = ttk.Entry(
             parent,
             textvariable=self.field_vars[key],
             width=14,
             state=state,
-            relief="solid",
-            bd=1,
+            font=tema.FUENTE,
+            style=tema.ESTILO_CAMPO,
         )
         if editable and validate:
             entry.configure(validate="key", validatecommand=validate)
@@ -319,14 +373,14 @@ class App(BaseTk):
 
     def _refresh_special_field_style(self, field_key: str) -> None:
         entry = self.entry_map.get(field_key)
-        if not entry:
+        if entry is None:
             return
 
         value = self.field_vars[field_key].get().strip().upper()
         if value == "X":
-            entry.configure(fg="red", font=("TkDefaultFont", 10, "bold"))
+            entry.configure(style=tema.ESTILO_CAMPO_FALTA, font=tema.FUENTE_NEGRITA)
         else:
-            entry.configure(fg="black", font=("TkDefaultFont", 10, "normal"))
+            entry.configure(style=tema.ESTILO_CAMPO, font=tema.FUENTE)
 
     def _build_table(self, parent: ttk.Frame, columns: list[tuple[str, str, int]]) -> ttk.Treeview:
         container = ttk.Frame(parent)
@@ -774,12 +828,14 @@ class App(BaseTk):
 
             iid = self.tree_main.insert("", tk.END, values=values, tags=tags)
             self.main_row_by_iid[iid] = row
+        self.orden_main.al_rellenar()
 
         self._fill_tree(
             self.tree_unassigned_excel,
             self.excel_unassigned_results,
             ["jg", "fecha", "importe_neto", "factura", "beneficiario", "concepto"],
         )
+        self.orden_excel.al_rellenar()
         self._update_unassigned_tab_title()
 
     @staticmethod
@@ -819,7 +875,13 @@ class App(BaseTk):
 
         self.detail_var.set("\n".join(lines))
 
+    def _es_clic_en_celda(self, event) -> bool:
+        # Los clics en los encabezados son para ordenar, no para editar filas.
+        return self.tree_main.identify_region(event.x, event.y) == "cell"
+
     def _on_main_double_click(self, event) -> None:
+        if not self._es_clic_en_celda(event):
+            return
         row_id = self.tree_main.identify_row(event.y)
         if not row_id:
             return
@@ -850,6 +912,8 @@ class App(BaseTk):
         self._update_status_summary(prefix="Asignacion manual actualizada. ")
 
     def _on_main_click_action(self, event) -> None:
+        if not self._es_clic_en_celda(event):
+            return
         row_id = self.tree_main.identify_row(event.y)
         if not row_id:
             return
@@ -946,6 +1010,8 @@ class App(BaseTk):
             self.tree_main.delete(item)
         for item in self.tree_unassigned_excel.get_children():
             self.tree_unassigned_excel.delete(item)
+        self.orden_main.quitar_orden()
+        self.orden_excel.quitar_orden()
 
         self.main_row_by_iid = {}
         self._update_unassigned_tab_title()

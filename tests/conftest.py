@@ -40,7 +40,7 @@ class VarFalsa:
 
 
 class EntryFalso:
-    """Sustituto de tk.Entry: solo acepta configure()."""
+    """Sustituto de ttk.Entry: solo acepta configure()."""
 
     def configure(self, **_kwargs) -> None:
         pass

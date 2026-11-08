@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import time
 import tkinter as tk
+from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -134,6 +136,117 @@ def test_flecha_copia_el_primer_candidato(ventana):
 
     assert resultado.jg_manual == resultado.candidatos[0]
     assert ventana.status_var.get().startswith("JG candidato copiado a JG asignado.")
+
+
+def _columna(tree, col):
+    return [tree.set(iid, col) for iid in tree.get_children()]
+
+
+def _importe(texto):
+    return Decimal(texto.replace(",", "."))
+
+
+def test_ordenar_por_encabezado_cicla_asc_desc_original(ventana):
+    _analizar(ventana)
+    tree = ventana.tree_main
+    paginas_originales = _columna(tree, "page")
+    originales = [_importe(v) for v in _columna(tree, "importe")]
+    assert originales != sorted(originales)  # si ya viniera ordenado, el test no probaria nada
+
+    assert tree.heading("importe", "command")  # el clic en el encabezado tiene accion
+    assert not tree.heading("jg_apply", "command")  # la columna de la flecha no se ordena
+    ventana.orden_main.clic_encabezado("importe")
+    importes = [_importe(v) for v in _columna(tree, "importe")]
+    assert importes == sorted(importes)
+    assert tree.heading("importe", "text") == "Importe ordenado ▲"
+
+    ventana.orden_main.clic_encabezado("importe")
+    assert [_importe(v) for v in _columna(tree, "importe")] == sorted(importes, reverse=True)
+    assert tree.heading("importe", "text") == "Importe ordenado ▼"
+
+    ventana.orden_main.clic_encabezado("importe")
+    assert _columna(tree, "page") == paginas_originales
+    assert tree.heading("importe", "text") == "Importe ordenado"
+
+    # Cambiar de columna empieza en ascendente y quita la flecha de la anterior.
+    ventana.orden_main.clic_encabezado("importe")
+    ventana.orden_main.clic_encabezado("page")
+    assert [int(p) for p in _columna(tree, "page")] == sorted(int(p) for p in paginas_originales)
+    assert tree.heading("importe", "text") == "Importe ordenado"
+    assert tree.heading("page", "text") == "Pagina ▲"
+
+
+def test_el_orden_se_mantiene_tras_asignar_y_se_quita_al_reiniciar(ventana, monkeypatch):
+    _analizar(ventana)
+    tree = ventana.tree_main
+    ventana.orden_main.clic_encabezado("importe")
+    ventana.orden_main.clic_encabezado("importe")  # descendente
+    orden = _columna(tree, "page")
+
+    segunda = tree.get_children()[1]
+    jg = ventana.main_row_by_iid[segunda].jg_efectivo
+    monkeypatch.setattr(app_mod.simpledialog, "askstring", lambda *a, **k: jg)
+    ventana._on_main_double_click(_evento(ventana, segunda))
+
+    assert _columna(tree, "page") == orden
+    assert tree.heading("importe", "text") == "Importe ordenado ▼"
+    # El mapa fila -> resultado sigue apuntando a la fila correcta tras reordenar.
+    for iid in tree.get_children():
+        assert tree.set(iid, "page") == str(ventana.main_row_by_iid[iid].pagina.page_number)
+
+    ventana.reset_state()
+    assert tree.heading("importe", "text") == "Importe ordenado"
+    _analizar(ventana)
+    assert [int(p) for p in _columna(tree, "page")] == list(range(1, 26))
+
+
+def test_clic_en_encabezado_no_edita_filas(ventana, monkeypatch):
+    _analizar(ventana)
+    tree = ventana.tree_main
+    tree.yview_moveto(0)
+    ventana.update()
+
+    def no_debe_llamarse(*_a, **_k):
+        raise AssertionError("No debe abrir el dialogo de asignacion")
+
+    monkeypatch.setattr(app_mod.simpledialog, "askstring", no_debe_llamarse)
+    x_jg, _y, ancho, _alto = tree.bbox(tree.get_children()[0], "jg_apply")
+    encabezado = SimpleNamespace(x=x_jg + ancho // 2, y=5)
+    assert tree.identify_region(encabezado.x, encabezado.y) == "heading"
+
+    ventana._on_main_double_click(encabezado)
+    ventana._on_main_click_action(encabezado)
+    assert all(not r.jg_manual for r in ventana.main_results)
+
+
+def test_ordenar_filas_excel_no_asignadas_por_fecha(ventana):
+    _analizar(ventana, excel="DATOS JG2.xlsx")
+    tree = ventana.tree_unassigned_excel
+    assert len(tree.get_children()) > 1
+
+    ventana.orden_excel.clic_encabezado("fecha")
+    fechas = [datetime.strptime(f, "%d-%m-%Y") for f in _columna(tree, "fecha") if f]
+    assert fechas == sorted(fechas)
+    assert tree.heading("fecha", "text") == "Fecha pago ▲"
+
+
+def test_tema_aplicado(ventana):
+    from tkinter import ttk
+
+    from procesardc import tema
+
+    estilo = ttk.Style(ventana)
+    assert estilo.theme_use() == "sun-valley-light"  # siempre claro, aunque Windows este en oscuro
+    # Sin la llamada a configure_colors el fondo general queda sin definir (gris de Tk).
+    assert str(estilo.lookup(".", "background")) == tema.PALETA.fondo
+    assert str(ventana.tree_main.tag_configure("incidencia", "foreground")) == ventana.paleta.error
+    assert str(ventana.tree_main.tag_configure("probable_ok", "foreground")) == ventana.paleta.ok
+    assert str(ventana.btn_analyze["style"]) == tema.ESTILO_BOTON_PRINCIPAL
+
+    ventana.field_vars["dc"].set("X")
+    assert str(ventana.entry_map["dc"]["style"]) == tema.ESTILO_CAMPO_FALTA
+    ventana.field_vars["dc"].set("1234")
+    assert str(ventana.entry_map["dc"]["style"]) == tema.ESTILO_CAMPO
 
 
 def test_reiniciar(ventana):
