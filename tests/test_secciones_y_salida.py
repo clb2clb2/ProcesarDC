@@ -6,6 +6,8 @@ import pytest
 from pypdf import PdfReader, PdfWriter
 
 from conftest import EJ, FIXTURES, PDF_COMPLETO, analizar, cargar_origen, generar_salida
+from procesardc import ventana as app_mod
+from procesardc.zona_soltar import texto_plano
 
 CONFLICTO = (
     "¡Atención! Hay marcadores o archivos en conflicto "
@@ -24,14 +26,10 @@ def contenido(carpeta) -> dict[str, int]:
 def test_escenario_a_contenedor_sin_justificantes(app_sin_ui, tmp_path):
     assert cargar_origen(app_sin_ui, FIXTURES / "origen_contenedor_ok.pdf") == ""
     campos = {k: v.get() for k, v in app_sin_ui.field_vars.items()}
-    assert campos == {
-        "anio": "",
-        "dc": "1234",
-        "cj": "5678",
-        "jg_origen": "JG encontrados: 2",
-        "rt": "9001",
-        "otros": "ANEXO",
-    }
+    assert campos == {"anio": "", "dc": "1234", "cj": "5678"}
+    assert texto_plano(app_mod.resumen_origen(app_sin_ui.origin_scan)) == (
+        "DC: 1234 ✔, CJ: 5678 ✔, RT: 9001 ✔\n2 justificantes de gastos cargados ✔\nOtros archivos: ANEXO"
+    )
 
     app_sin_ui.no_jp_mode_var.set(True)
     assert app_sin_ui._validate_before_processing() == ""
@@ -90,8 +88,9 @@ def test_archivos_directos_mas_contenedor_de_jg(app_sin_ui, tmp_path):
     assert error == ""
     assert app_sin_ui.field_vars["dc"].get() == "3391"
     assert app_sin_ui.field_vars["cj"].get() == "238"
-    assert app_sin_ui.field_vars["rt"].get() == "536"
-    assert app_sin_ui.field_vars["otros"].get() == "PARAM"
+    assert texto_plano(app_mod.resumen_origen(app_sin_ui.origin_scan)) == (
+        "DC: 3391 ✔, CJ: 238 ✔, RT: 536 ✔\n2 justificantes de gastos cargados ✔\nOtros archivos: PARAM"
+    )
 
     app_sin_ui.no_jp_mode_var.set(True)
     app_sin_ui.doc_type_var.set("Tarjeta INV")

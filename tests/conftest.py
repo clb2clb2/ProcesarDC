@@ -39,13 +39,6 @@ class VarFalsa:
         self.valor = valor
 
 
-class EntryFalso:
-    """Sustituto de ttk.Entry: solo acepta configure()."""
-
-    def configure(self, **_kwargs) -> None:
-        pass
-
-
 def crear_app_sin_ui() -> app_mod.App:
     inst = app_mod.App.__new__(app_mod.App)
     inst.base_dir = RAIZ
@@ -66,11 +59,7 @@ def crear_app_sin_ui() -> app_mod.App:
         "anio": VarFalsa(""),
         "dc": VarFalsa(""),
         "cj": VarFalsa(""),
-        "jg_origen": VarFalsa("X"),
-        "rt": VarFalsa("—"),
-        "otros": VarFalsa("—"),
     }
-    inst.entry_map = {key: EntryFalso() for key in inst.field_vars}
     return inst
 
 

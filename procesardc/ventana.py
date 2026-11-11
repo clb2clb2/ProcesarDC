@@ -18,19 +18,22 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pypdf import PdfReader
 
-from . import cruce, salida, tema
+from . import ayuda, cruce, salida, tema
 from .lectura_excel import leer_excel
 from .modelos import Estado, ExcelRowData, PdfPageData, Resaltado, ResultadoCruce
 from .normalizacion import formatear_decimal, normalizar_jg_manual
 from .ordenacion import FECHA, IMPORTE, NUMERO, TEXTO
 from .secciones import EscaneoOrigen, escanear_origen, validar_carga
-from .tabla import OrdenTabla
+from .tabla import ColumnasAjustables, OrdenTabla
+from . import zona_soltar
+from .zona_soltar import Lineas, Segmento, ZonaSoltar
 from .validacion import anio_detectado, es_anio_valido, validar_para_procesar
 
 try:
-    from tkinterdnd2 import DND_FILES, TkinterDnD
+    from tkinterdnd2 import DND_FILES, REFUSE_DROP, TkinterDnD
 except ImportError:
     DND_FILES = None
+    REFUSE_DROP = None
     TkinterDnD = None
 
 
@@ -38,6 +41,50 @@ BaseTk = TkinterDnD.Tk if TkinterDnD else tk.Tk
 
 # Cada cuanto mira la ventana si ha terminado una tarea en segundo plano.
 INTERVALO_TAREAS_MS = 50
+
+# Textos de las zonas de carga.
+TEXTO_ZONA_ORIGEN = "Arrastra aquí los PDFs de origen"
+TEXTO_ZONA_JP = "Arrastra el PDF de justificantes de pago"
+TEXTO_ZONA_EXCEL = "Arrastra el Excel de datos de justif. de gasto"
+PISTA_CARGAR = "(o pulsa para cargar)"
+# Alto minimo de las zonas de carga (crecen si su texto no cabe).
+ALTO_ZONA_ORIGEN = 150
+ALTO_ZONA = 68
+
+# Ancho minimo de las columnas de texto largo, que se estrechan para que la tabla quepa sin barra horizontal.
+ANCHO_MINIMO_AJUSTABLE = 120
+
+
+MARCA_SI = "✔"
+MARCA_NO = "✖"
+
+
+def resumen_origen(escaneo: EscaneoOrigen) -> Lineas:
+    """Lo detectado en los PDFs de origen, para la zona de carga (marcas en verde/rojo):
+
+    DC: 1234 ✔, CJ: 5678 ✔, RT: 9001 ✔
+    2 justificantes de gastos cargados ✔
+    Otros archivos: ANEXO
+    """
+
+    def marca(hay: bool) -> Segmento:
+        return (MARCA_SI, zona_soltar.SI) if hay else (MARCA_NO, zona_soltar.NO)
+
+    primera: list[Segmento] = []
+    for prefijo in ("DC", "CJ", "RT"):
+        numero = escaneo.numero_con_prefijo(prefijo)
+        if primera:
+            primera.append((", ", zona_soltar.TEXTO))
+        primera += [(f"{prefijo}: {numero} " if numero else f"{prefijo}: ", zona_soltar.TEXTO), marca(bool(numero))]
+
+    total = len(escaneo.ids_jg)
+    texto_jg = "1 justificante de gastos cargado " if total == 1 else f"{total} justificantes de gastos cargados "
+    otros = ", ".join(escaneo.otros) or "—"
+    return [
+        primera,
+        [(texto_jg, zona_soltar.TEXTO), marca(total > 0)],
+        [(f"Otros archivos: {otros}", zona_soltar.TEXTO)],
+    ]
 
 
 def _app_base_dir() -> Path:
@@ -47,10 +94,20 @@ def _app_base_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def ruta_recurso(relativa: str) -> Path:
+    """Fichero empaquetado con la app: en el .exe esta en la carpeta temporal de PyInstaller."""
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    return base / relativa
+
+
+RUTA_ICONO = "assets/procesardc.ico"
+
+
 class App(BaseTk):
     def __init__(self) -> None:
         super().__init__()
         self.title("ProcesarDC")
+        self._poner_icono()
         self.geometry("1500x860")
         self.minsize(1200, 740)
 
@@ -78,102 +135,68 @@ class App(BaseTk):
         self._refresh_meta_fields()
         self._update_action_buttons()
 
+    def _poner_icono(self) -> None:
+        """Icono de la ventana; `default` lo aplica tambien a la ayuda y a los dialogos."""
+        icono = ruta_recurso(RUTA_ICONO)
+        if not icono.exists():
+            return
+        try:
+            self.iconbitmap(default=str(icono))
+        except tk.TclError:
+            pass  # sin icono propio, la app funciona igual
+
     def _build_ui(self) -> None:
         root = ttk.Frame(self, padding=10)
         root.pack(fill=tk.BOTH, expand=True)
 
-        top_buttons = ttk.Frame(root)
-        top_buttons.pack(fill=tk.X)
-        for col in range(3):
-            top_buttons.columnconfigure(col, weight=1, uniform="top_thirds")
+        # Carga: a la izquierda (mitad del ancho) la zona de los PDFs de origen; a la derecha,
+        # apilados, la casilla de "sin justificantes" y las zonas de JP y Excel.
+        carga = ttk.Frame(root)
+        carga.pack(fill=tk.X)
+        carga.columnconfigure(0, weight=1, uniform="mitades")
+        carga.columnconfigure(1, weight=1, uniform="mitades")
 
-        self.btn_load_origin = ttk.Button(
-            top_buttons,
-            text="Cargar PDFs origen",
-            command=self.load_origin_pdfs,
+        self.lbl_drop_origin = self._build_drop_zone(
+            carga, TEXTO_ZONA_ORIGEN, self.load_origin_pdfs, alto=ALTO_ZONA_ORIGEN, ayuda_zona=ayuda.AYUDA_ORIGEN
         )
+        self.lbl_drop_origin.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
 
+        derecha = ttk.Frame(carga)
+        derecha.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        derecha.columnconfigure(0, weight=1)
         self.chk_no_jp_mode = ttk.Checkbutton(
-            top_buttons,
+            derecha,
             text="DC sin justificantes de pago (tarjetas o pago manual)",
             variable=self.no_jp_mode_var,
             command=self._on_toggle_no_jp_mode,
         )
-        self.chk_no_jp_mode.grid(row=0, column=1, sticky="w", padx=3, pady=(0, 4))
-
-        self.btn_load_origin.grid(row=1, column=0, sticky="ew", padx=(0, 6))
-
-        self.btn_load_jp = ttk.Button(
-            top_buttons,
-            text="Cargar PDF Justif. Pago",
-            command=self.load_jp_pdf,
-        )
-        self.btn_load_jp.grid(row=1, column=1, sticky="ew", padx=3)
-
-        self.btn_load_excel = ttk.Button(
-            top_buttons,
-            text="Cargar Excel datos Justif. Gastos",
-            command=self.load_excel,
-        )
-        self.btn_load_excel.grid(row=1, column=2, sticky="ew", padx=(6, 0))
-
-        drop_row = ttk.Frame(root, padding=(0, 8, 0, 0))
-        drop_row.pack(fill=tk.X)
-        for col in range(3):
-            drop_row.columnconfigure(col, weight=1, uniform="drop_thirds")
-
-        self.lbl_drop_origin = self._build_drop_zone(
-            drop_row,
-            "Arrastra aqui los PDF de DC, CJ, JG, etc.",
-            0,
-        )
+        self.chk_no_jp_mode.grid(row=0, column=0, sticky="w", pady=(0, 6))
         self.lbl_drop_jp = self._build_drop_zone(
-            drop_row,
-            "Arrastra aqui el PDF de Justif. Pago",
-            1,
+            derecha, TEXTO_ZONA_JP, self.load_jp_pdf, alto=ALTO_ZONA, ayuda_zona=ayuda.AYUDA_JP
         )
+        self.lbl_drop_jp.grid(row=1, column=0, sticky="nsew", pady=(0, 6))
         self.lbl_drop_excel = self._build_drop_zone(
-            drop_row,
-            "Arrastra aqui el Excel de Justif. Gastos",
-            2,
+            derecha, TEXTO_ZONA_EXCEL, self.load_excel, alto=ALTO_ZONA, ayuda_zona=ayuda.AYUDA_EXCEL
         )
+        self.lbl_drop_excel.grid(row=2, column=0, sticky="nsew")
+        # Si la zona de origen crece por su texto, las de la derecha se reparten el alto.
+        derecha.rowconfigure(1, weight=1)
+        derecha.rowconfigure(2, weight=1)
 
         if DND_FILES:
             self._wire_drop(self.lbl_drop_origin, self._on_drop_origin)
             self._wire_drop(self.lbl_drop_jp, self._on_drop_jp)
             self._wire_drop(self.lbl_drop_excel, self._on_drop_excel)
 
-        fields = ttk.LabelFrame(root, text="Datos detectados", padding=8)
-        fields.pack(fill=tk.X, pady=(10, 8))
-
+        # Valores que usan la validacion y el procesado (ya no se muestran en campos).
         self.field_vars = {
             "anio": tk.StringVar(value=""),
             "dc": tk.StringVar(value=""),
             "cj": tk.StringVar(value=""),
-            "jg_origen": tk.StringVar(value="X"),
-            "rt": tk.StringVar(value="—"),
-            "otros": tk.StringVar(value="—"),
         }
 
-        vcmd_numbers = (self.register(self._validate_numeric), "%P")
-
-        self.entry_map: dict[str, ttk.Entry] = {}
-
-        self._add_field(fields, "AÑO", "anio", 0, editable=False)
-        self._add_field(fields, "DC", "dc", 1, validate=vcmd_numbers)
-        self._add_field(fields, "CJ", "cj", 2, validate=vcmd_numbers)
-        self._add_field(fields, "JG", "jg_origen", 3, editable=False)
-        self._add_field(fields, "RT", "rt", 4, validate=vcmd_numbers)
-        self._add_field(fields, "OTROS", "otros", 5, editable=False)
-
-        self.field_vars["dc"].trace_add("write", lambda *_: self._refresh_special_field_style("dc"))
-        self.field_vars["cj"].trace_add("write", lambda *_: self._refresh_special_field_style("cj"))
-        self.field_vars["jg_origen"].trace_add(
-            "write", lambda *_: self._refresh_special_field_style("jg_origen")
-        )
-
         actions = ttk.Frame(root)
-        actions.pack(fill=tk.X, pady=(0, 8))
+        actions.pack(fill=tk.X, pady=(10, 8))
         actions.columnconfigure(0, weight=0)
         actions.columnconfigure(1, weight=1)
         actions.columnconfigure(2, weight=0)
@@ -198,26 +221,26 @@ class App(BaseTk):
 
         columns = [
             ("page", "Pagina", 70),
-            ("fecha", "Fecha operacion", 110),
-            ("importe", "Importe ordenado", 130),
+            ("fecha", "Fecha", 100),
+            ("importe", "Importe", 100),
             ("factura", "Factura", 140),
             ("beneficiario", "Beneficiario", 280),
             ("concepto", "Concepto", 340),
-            ("jg", "JG asignado", 150),
+            ("jg", "JG asignado", 120),
             ("jg_apply", "", 34),
             ("jg_candidates", "JG candidatos", 220),
         ]
 
-        self.tree_main = self._build_table(tab_main, columns)
-        self.tree_main.column("jg_apply", anchor="center", width=34, stretch=False)
+        self.tree_main = self._build_table(tab_main, columns, ajustables={"beneficiario", "concepto", "jg_candidates"})
+        self.tree_main.column("jg_apply", anchor="center")
         self.tree_main.tag_configure("incidencia", foreground=self.paleta.error)
         self.tree_main.tag_configure("probable_ok", foreground=self.paleta.ok)
         self.tree_main.tag_configure(
             "jg_duplicado", foreground=self.paleta.duplicado_texto, background=self.paleta.duplicado_fondo
         )
-        self.tree_main.bind("<Double-1>", self._on_main_double_click)
+        self.tree_main.bind("<Double-1>", self._on_main_double_click, add="+")
         self.tree_main.bind("<<TreeviewSelect>>", self._on_main_selection_changed)
-        self.tree_main.bind("<ButtonRelease-1>", self._on_main_click_action)
+        self.tree_main.bind("<ButtonRelease-1>", self._on_main_click_action, add="+")
         self.orden_main = OrdenTabla(
             self.tree_main,
             {
@@ -242,6 +265,7 @@ class App(BaseTk):
                 ("beneficiario", "Beneficiario", 280),
                 ("concepto", "Concepto", 560),
             ],
+            ajustables={"beneficiario", "concepto"},
         )
         self.orden_excel = OrdenTabla(
             self.tree_unassigned_excel,
@@ -298,40 +322,36 @@ class App(BaseTk):
                 "Drag&drop no disponible: instale tkinterdnd2. Puede usar los botones de carga."
             )
 
-    def _build_drop_zone(self, parent: ttk.Frame, title: str, col: int) -> tk.Label:
-        # Tarjeta plana con borde fino; se ilumina al arrastrar un fichero encima.
-        label = tk.Label(
-            parent,
-            text=title,
-            font=tema.FUENTE,
-            relief="flat",
-            bd=0,
-            padx=10,
-            pady=18,
-            justify="center",
-            anchor="center",
-            highlightthickness=1,
+    def _build_drop_zone(
+        self, parent: ttk.Frame, title: str, al_pulsar, alto: int, ayuda_zona: ayuda.Ayuda
+    ) -> ZonaSoltar:
+        # Se arrastran ficheros encima o se pulsa para abrir el selector; el "?" abre la ayuda.
+        zona = ZonaSoltar(
+            parent, title, PISTA_CARGAR, self.paleta.zonas, al_pulsar=al_pulsar,
+            al_ayuda=lambda: self._mostrar_ayuda(ayuda_zona, zona),
+            fuente=tema.FUENTE, fuente_pista=tema.FUENTE_PISTA, alto=alto,
         )
-        self._resaltar_zona(label, False)
-        label.grid(row=0, column=col, sticky="ew", padx=(0 if col == 0 else 3, 0 if col == 2 else 3))
-        return label
+        return zona
 
-    def _resaltar_zona(self, zona: tk.Label, activa: bool) -> None:
-        p = self.paleta
-        fondo, borde = (p.zona_activa_fondo, p.zona_activa_borde) if activa else (p.zona_fondo, p.zona_borde)
-        zona.configure(bg=fondo, fg=p.texto, highlightbackground=borde, highlightcolor=borde)
+    def _mostrar_ayuda(self, ayuda_zona: ayuda.Ayuda, zona: ZonaSoltar) -> ayuda.VentanaAyuda:
+        return ayuda.mostrar(self, ayuda_zona, zona, fuente=tema.FUENTE, fuente_titulo=tema.FUENTE_TITULO)
 
-    def _wire_drop(self, widget: tk.Label, handler) -> None:
+    @staticmethod
+    def _wire_drop(widget: ZonaSoltar, handler) -> None:
         def entrar(event):
-            self._resaltar_zona(widget, True)
+            if not widget.habilitada:
+                return REFUSE_DROP
+            widget.resaltar(True)
             return event.action
 
         def salir(event):
-            self._resaltar_zona(widget, False)
+            widget.resaltar(False)
             return event.action
 
         def soltar(event):
-            self._resaltar_zona(widget, False)
+            widget.resaltar(False)
+            if not widget.habilitada:
+                return REFUSE_DROP
             return handler(event)
 
         widget.drop_target_register(DND_FILES)
@@ -339,50 +359,10 @@ class App(BaseTk):
         widget.dnd_bind("<<DropLeave>>", salir)
         widget.dnd_bind("<<Drop>>", soltar)
 
-    def _add_field(
-        self,
-        parent: ttk.LabelFrame,
-        label: str,
-        key: str,
-        col: int,
-        editable: bool = True,
-        validate=None,
-    ) -> None:
-        parent.columnconfigure(col * 2 + 1, weight=1)
-
-        ttk.Label(parent, text=label).grid(row=0, column=col * 2, sticky="w", padx=(0, 4))
-
-        state = "normal" if editable else "readonly"
-        entry = ttk.Entry(
-            parent,
-            textvariable=self.field_vars[key],
-            width=14,
-            state=state,
-            font=tema.FUENTE,
-            style=tema.ESTILO_CAMPO,
-        )
-        if editable and validate:
-            entry.configure(validate="key", validatecommand=validate)
-
-        entry.grid(row=0, column=col * 2 + 1, sticky="ew", padx=(0, 10))
-        self.entry_map[key] = entry
-
-    @staticmethod
-    def _validate_numeric(proposed: str) -> bool:
-        return proposed == "" or proposed.isdigit()
-
-    def _refresh_special_field_style(self, field_key: str) -> None:
-        entry = self.entry_map.get(field_key)
-        if entry is None:
-            return
-
-        value = self.field_vars[field_key].get().strip().upper()
-        if value == "X":
-            entry.configure(style=tema.ESTILO_CAMPO_FALTA, font=tema.FUENTE_NEGRITA)
-        else:
-            entry.configure(style=tema.ESTILO_CAMPO, font=tema.FUENTE)
-
-    def _build_table(self, parent: ttk.Frame, columns: list[tuple[str, str, int]]) -> ttk.Treeview:
+    def _build_table(
+        self, parent: ttk.Frame, columns: list[tuple[str, str, int]], ajustables: set[str]
+    ) -> ttk.Treeview:
+        """Tabla sin barra horizontal: las columnas `ajustables` ceden o ganan ancho con la ventana."""
         container = ttk.Frame(parent)
         container.pack(fill=tk.BOTH, expand=True)
 
@@ -391,15 +371,17 @@ class App(BaseTk):
 
         for col_id, title, width in columns:
             tree.heading(col_id, text=title)
-            tree.column(col_id, width=width, anchor="w")
+            tree.column(col_id, width=width, minwidth=20, anchor="w")
+        # El ancho de diseno de cada columna ajustable es su peso en el reparto.
+        tree.columnas_ajustables = ColumnasAjustables(
+            tree, {c: w for c, _t, w in columns if c in ajustables}, ANCHO_MINIMO_AJUSTABLE
+        )
 
         y_scroll = ttk.Scrollbar(container, orient=tk.VERTICAL, command=tree.yview)
-        x_scroll = ttk.Scrollbar(container, orient=tk.HORIZONTAL, command=tree.xview)
-        tree.configure(yscrollcommand=y_scroll.set, xscrollcommand=x_scroll.set)
+        tree.configure(yscrollcommand=y_scroll.set)
 
         tree.grid(row=0, column=0, sticky="nsew")
         y_scroll.grid(row=0, column=1, sticky="ns")
-        x_scroll.grid(row=1, column=0, sticky="ew")
 
         container.rowconfigure(0, weight=1)
         container.columnconfigure(0, weight=1)
@@ -442,6 +424,7 @@ class App(BaseTk):
         self._set_excel(files[0])
 
     def _update_action_buttons(self) -> None:
+        self._actualizar_zonas()
         if self.active_job is not None:
             self.btn_analyze.configure(state=tk.DISABLED)
             self.btn_process.configure(state=tk.DISABLED)
@@ -457,10 +440,17 @@ class App(BaseTk):
         )
         self.btn_reset.configure(state=tk.NORMAL)
 
+    def _actualizar_zonas(self) -> None:
+        """Las zonas de carga no responden mientras hay una tarea en marcha; las de JP y Excel,
+        tampoco en el modo sin justificantes de pago."""
+        libre = self.active_job is None
+        con_jp = not self.no_jp_mode_var.get()
+        self.lbl_drop_origin.habilitar(libre)
+        self.lbl_drop_jp.habilitar(libre and con_jp)
+        self.lbl_drop_excel.habilitar(libre and con_jp)
+
     def _on_toggle_no_jp_mode(self) -> None:
         no_jp_mode = bool(self.no_jp_mode_var.get())
-        self.btn_load_jp.configure(state=tk.DISABLED if no_jp_mode else tk.NORMAL)
-        self.btn_load_excel.configure(state=tk.DISABLED if no_jp_mode else tk.NORMAL)
 
         if no_jp_mode:
             self.status_var.set(
@@ -494,8 +484,7 @@ class App(BaseTk):
             messagebox.showerror("Error", error_message)
             return
 
-        names = [f.stem for f in self.origin_pdf_paths]
-        self.lbl_drop_origin.configure(text=", ".join(names) if names else "")
+        self.lbl_drop_origin.set_texto(resumen_origen(self.origin_scan), pista="")
 
         self.status_var.set(f"PDFs origen cargados: {len(self.origin_pdf_paths)}")
         self._update_action_buttons()
@@ -520,7 +509,7 @@ class App(BaseTk):
             return
 
         self.jp_pdf_path = path
-        self.lbl_drop_jp.configure(text=f"JP encontrados: {page_count}")
+        self.lbl_drop_jp.set_texto(f"JP encontrados: {page_count}", pista="")
         self.status_var.set("PDF de justificantes de pago cargado correctamente.")
         self._update_action_buttons()
 
@@ -544,7 +533,7 @@ class App(BaseTk):
 
         self.excel_path = path
         self.excel_data = excel_rows
-        self.lbl_drop_excel.configure(text=f"JG en la tabla Excel: {len(self.excel_data)}")
+        self.lbl_drop_excel.set_texto(f"JG en la tabla Excel: {len(self.excel_data)}", pista="")
         self._refresh_meta_fields()
         self.status_var.set("Excel de justificantes de gastos cargado correctamente.")
         self._update_action_buttons()
@@ -580,25 +569,12 @@ class App(BaseTk):
         self._refresh_anio_field()
         self._refresh_prefixed_number_field("dc", escaneo.numero_con_prefijo("DC"), missing_value="X")
         self._refresh_prefixed_number_field("cj", escaneo.numero_con_prefijo("CJ"), missing_value="X")
-        jg_count = len(escaneo.ids_jg)
-        self.field_vars["jg_origen"].set(f"JG encontrados: {jg_count}" if jg_count > 0 else "X")
-        self._refresh_prefixed_number_field("rt", escaneo.numero_con_prefijo("RT"), missing_value="—")
-        self.field_vars["otros"].set(", ".join(escaneo.otros) or "—")
-        self._refresh_special_field_style("dc")
-        self._refresh_special_field_style("cj")
-        self._refresh_special_field_style("jg_origen")
 
     def _refresh_anio_field(self) -> None:
         self.field_vars["anio"].set(anio_detectado(self.excel_data))
 
     def _refresh_prefixed_number_field(self, field_key: str, number: str, missing_value: str) -> None:
-        if not number:
-            self.field_vars[field_key].set(missing_value)
-            self.entry_map[field_key].configure(state="readonly")
-            return
-
-        self.entry_map[field_key].configure(state="normal")
-        self.field_vars[field_key].set(number)
+        self.field_vars[field_key].set(number or missing_value)
 
     def analyze(self) -> None:
         if self.no_jp_mode_var.get():
@@ -984,27 +960,14 @@ class App(BaseTk):
         self.main_results = []
         self.excel_unassigned_results = []
 
-        self.lbl_drop_origin.configure(text="Arrastra aqui los PDF de DC, CJ, JG, etc.")
-        self.lbl_drop_jp.configure(text="Arrastra aqui el PDF de Justif. Pago")
-        self.lbl_drop_excel.configure(text="Arrastra aqui el Excel de Justif. Gastos")
+        self.lbl_drop_origin.set_texto(TEXTO_ZONA_ORIGEN, PISTA_CARGAR)
+        self.lbl_drop_jp.set_texto(TEXTO_ZONA_JP, PISTA_CARGAR)
+        self.lbl_drop_excel.set_texto(TEXTO_ZONA_EXCEL, PISTA_CARGAR)
 
         self.field_vars["anio"].set("")
         self.field_vars["dc"].set("")
         self.field_vars["cj"].set("")
-        self.field_vars["jg_origen"].set("X")
-        self.field_vars["rt"].set("—")
-        self.field_vars["otros"].set("—")
         self.no_jp_mode_var.set(False)
-        self.btn_load_jp.configure(state=tk.NORMAL)
-        self.btn_load_excel.configure(state=tk.NORMAL)
-
-        self.entry_map["dc"].configure(state="readonly")
-        self.entry_map["cj"].configure(state="readonly")
-        self.entry_map["rt"].configure(state="readonly")
-
-        self._refresh_special_field_style("dc")
-        self._refresh_special_field_style("cj")
-        self._refresh_special_field_style("jg_origen")
 
         for item in self.tree_main.get_children():
             self.tree_main.delete(item)

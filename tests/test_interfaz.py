@@ -158,21 +158,21 @@ def test_ordenar_por_encabezado_cicla_asc_desc_original(ventana):
     ventana.orden_main.clic_encabezado("importe")
     importes = [_importe(v) for v in _columna(tree, "importe")]
     assert importes == sorted(importes)
-    assert tree.heading("importe", "text") == "Importe ordenado ▲"
+    assert tree.heading("importe", "text") == "Importe ▲"
 
     ventana.orden_main.clic_encabezado("importe")
     assert [_importe(v) for v in _columna(tree, "importe")] == sorted(importes, reverse=True)
-    assert tree.heading("importe", "text") == "Importe ordenado ▼"
+    assert tree.heading("importe", "text") == "Importe ▼"
 
     ventana.orden_main.clic_encabezado("importe")
     assert _columna(tree, "page") == paginas_originales
-    assert tree.heading("importe", "text") == "Importe ordenado"
+    assert tree.heading("importe", "text") == "Importe"
 
     # Cambiar de columna empieza en ascendente y quita la flecha de la anterior.
     ventana.orden_main.clic_encabezado("importe")
     ventana.orden_main.clic_encabezado("page")
     assert [int(p) for p in _columna(tree, "page")] == sorted(int(p) for p in paginas_originales)
-    assert tree.heading("importe", "text") == "Importe ordenado"
+    assert tree.heading("importe", "text") == "Importe"
     assert tree.heading("page", "text") == "Pagina ▲"
 
 
@@ -189,13 +189,13 @@ def test_el_orden_se_mantiene_tras_asignar_y_se_quita_al_reiniciar(ventana, monk
     ventana._on_main_double_click(_evento(ventana, segunda))
 
     assert _columna(tree, "page") == orden
-    assert tree.heading("importe", "text") == "Importe ordenado ▼"
+    assert tree.heading("importe", "text") == "Importe ▼"
     # El mapa fila -> resultado sigue apuntando a la fila correcta tras reordenar.
     for iid in tree.get_children():
         assert tree.set(iid, "page") == str(ventana.main_row_by_iid[iid].pagina.page_number)
 
     ventana.reset_state()
-    assert tree.heading("importe", "text") == "Importe ordenado"
+    assert tree.heading("importe", "text") == "Importe"
     _analizar(ventana)
     assert [int(p) for p in _columna(tree, "page")] == list(range(1, 26))
 
@@ -243,10 +243,273 @@ def test_tema_aplicado(ventana):
     assert str(ventana.tree_main.tag_configure("probable_ok", "foreground")) == ventana.paleta.ok
     assert str(ventana.btn_analyze["style"]) == tema.ESTILO_BOTON_PRINCIPAL
 
-    ventana.field_vars["dc"].set("X")
-    assert str(ventana.entry_map["dc"]["style"]) == tema.ESTILO_CAMPO_FALTA
-    ventana.field_vars["dc"].set("1234")
-    assert str(ventana.entry_map["dc"]["style"]) == tema.ESTILO_CAMPO
+    # Encabezados planos (sin la imagen redondeada de sv-ttk) y con la letra normal.
+    assert estilo.layout("Heading")[0][0] == tema.ELEMENTO_ENCABEZADO
+    assert str(estilo.lookup("Heading", "font")) == tema.FUENTE
+    assert ventana.tree_main.heading("importe", "text") == "Importe"
+    assert ventana.tree_main.heading("fecha", "text") == "Fecha"
+
+
+
+def _colores_zona(zona):
+    return {zona.itemcget(i, "fill") for i in zona.find_all() if zona.type(i) == "rectangle"}
+
+
+def _pulsar(zona):
+    zona._pulsar(SimpleNamespace(x=5, y=5))
+
+
+def test_zonas_de_carga_textos_y_estados(ventana):
+    from procesardc import tema
+    from procesardc.zona_soltar import DESHABILITADA, ENCIMA, NORMAL
+
+    zonas = tema.PALETA.zonas
+    zona = ventana.lbl_drop_jp
+    ventana.update()
+    assert not hasattr(ventana, "btn_load_jp")  # los botones de carga ya no existen
+    assert (zona.texto, zona.pista) == ("Arrastra el PDF de justificantes de pago", "(o pulsa para cargar)")
+    assert ventana.lbl_drop_origin.texto == "Arrastra aquí los PDFs de origen"
+    assert ventana.lbl_drop_excel.texto == "Arrastra el Excel de datos de justif. de gasto"
+    assert zona.itemcget("pista", "text") == "(o pulsa para cargar)"
+    assert str(zona["cursor"]) == "hand2"
+    # Icono pequeno a la izquierda, centrado en vertical, sin pisar el texto.
+    x_icono, y_icono = zona.coords("icono")
+    assert x_icono < zona.winfo_width() / 8 and abs(y_icono - zona.winfo_height() / 2) <= 1
+    assert zona.bbox("icono")[2] < zona.bbox("contenido")[0]
+
+    ventana._set_jp_pdf(EJ / "JP536.pdf")
+    assert _texto_dibujado(zona) == "JP encontrados: 25"
+    assert not zona.find_withtag("pista")  # cargado: sin "(o pulsa para cargar)"
+
+    assert zona.estado == NORMAL and _colores_zona(zona) == {zonas[NORMAL].fondo, zonas[NORMAL].borde}
+    zona.resaltar(True)  # fichero arrastrado encima
+    assert zona.estado == ENCIMA and _colores_zona(zona) == {zonas[ENCIMA].fondo, zonas[ENCIMA].borde}
+    assert _texto_dibujado(zona) == "JP encontrados: 25"  # el texto sobrevive al redibujo
+    zona.resaltar(False)
+    zona._set_raton(True)  # raton encima
+    assert zona.estado == ENCIMA
+    zona._set_raton(False)
+    assert zona.estado == NORMAL
+
+    ventana.no_jp_mode_var.set(True)
+    ventana._on_toggle_no_jp_mode()
+    assert zona.estado == DESHABILITADA and str(zona["cursor"]) == ""
+    assert _colores_zona(zona) == {zonas[DESHABILITADA].fondo, zonas[DESHABILITADA].borde}
+    assert ventana.lbl_drop_excel.estado == DESHABILITADA and ventana.lbl_drop_origin.habilitada
+
+    ventana.reset_state()
+    assert zona.habilitada and (zona.texto, zona.pista) == (
+        "Arrastra el PDF de justificantes de pago", "(o pulsa para cargar)",
+    )
+
+
+def _texto_dibujado(zona):
+    """Texto de los trozos dibujados, en orden (sin saltos de linea)."""
+    return "".join(zona.itemcget(i, "text") for i in zona.find_withtag("texto"))
+
+
+def test_disposicion_de_las_zonas(ventana):
+    ventana.update()
+    origen, jp, excel = ventana.lbl_drop_origin, ventana.lbl_drop_jp, ventana.lbl_drop_excel
+    chk = ventana.chk_no_jp_mode
+    ancho_total = origen.master.winfo_width()
+    # La de origen ocupa la mitad izquierda y es mas alta que las otras dos.
+    assert abs(origen.winfo_width() - ancho_total / 2) <= 10
+    assert origen.winfo_height() > jp.winfo_height()
+    # A la derecha, apilados: la casilla, la zona de JP y la de Excel.
+    assert jp.winfo_rootx() > origen.winfo_rootx() + origen.winfo_width() - 1
+    assert chk.winfo_rooty() < jp.winfo_rooty() < excel.winfo_rooty()
+    assert jp.winfo_rootx() == excel.winfo_rootx()
+    # Las tres zonas acaban a la misma altura por abajo.
+    fondo = lambda w: w.winfo_rooty() + w.winfo_height()  # noqa: E731
+    assert abs(fondo(origen) - fondo(excel)) <= 1
+
+
+def test_zona_de_origen_muestra_lo_detectado(ventana):
+    import tkinter.font as tkfont
+
+    from procesardc import tema
+
+    ventana._set_origin_pdfs([FIXTURES / "origen_contenedor_ok.pdf"])
+    ventana.update()
+    zona = ventana.lbl_drop_origin
+    assert zona.texto == (
+        "DC: 1234 ✔, CJ: 5678 ✔, RT: 9001 ✔\n2 justificantes de gastos cargados ✔\nOtros archivos: ANEXO"
+    )
+    assert _texto_dibujado(zona) == zona.texto.replace("\n", "")
+    assert not zona.find_withtag("pista")
+
+    # Marcas ✔ en verde y con letra mas pequena que el texto.
+    marcas = zona.find_withtag("si")
+    assert len(marcas) == 4 and not zona.find_withtag("no")
+    assert {zona.itemcget(i, "fill") for i in marcas} == {tema.PALETA.zonas["normal"].si}
+    tam = lambda fuente: abs(tkfont.nametofont(fuente, root=ventana).actual("size"))  # noqa: E731
+    assert tam(zona.itemcget(marcas[0], "font")) < tam(zona.itemcget(zona.find_withtag("texto")[0], "font"))
+
+    # Con la ventana estrecha el texto ocupa mas renglones, pero sigue dentro de la zona.
+    ventana.geometry("1200x860+0+0")
+    ventana.update()
+    ventana.update()
+    _x0, y0, _x1, y1 = zona.bbox("contenido")
+    assert y0 >= 0 and y1 <= zona.winfo_height()
+    ventana.geometry("1500x860+0+0")
+    ventana.update()
+
+
+def _centro_ayuda(zona):
+    x0, y0, x1, y1 = zona.rect_ayuda()
+    return SimpleNamespace(x=(x0 + x1) / 2, y=(y0 + y1) / 2)
+
+
+def test_icono_de_ayuda_en_las_tres_zonas(ventana, monkeypatch):
+    from procesardc import ayuda, tema
+
+    ventana.update()
+    abiertas = []
+    monkeypatch.setattr(app_mod.filedialog, "askopenfilename", lambda **k: abiertas.append("selector") or "")
+    esperadas = {
+        "lbl_drop_origin": ayuda.AYUDA_ORIGEN,
+        "lbl_drop_jp": ayuda.AYUDA_JP,
+        "lbl_drop_excel": ayuda.AYUDA_EXCEL,
+    }
+    for nombre, contenido in esperadas.items():
+        zona = getattr(ventana, nombre)
+        # Arriba a la derecha.
+        x, y = zona.coords("ayuda_texto")
+        assert x > zona.winfo_width() - 40 and y < 30
+        # Pulsar el "?" abre la ayuda de la zona, no el selector de archivos.
+        zona._pulsar(_centro_ayuda(zona))
+        ventana.update()
+        abierta = ventana._ventana_ayuda
+        assert abierta.winfo_exists() and abierta.ayuda is contenido
+        assert abiertas == []
+    # Solo una a la vez: abrir la del Excel ha cerrado las anteriores.
+    assert sum(isinstance(w, ayuda.VentanaAyuda) for w in ventana.winfo_children()) == 1
+
+    # Escape la cierra.
+    abierta.event_generate("<Escape>")
+    ventana.update()
+    assert not abierta.winfo_exists()
+
+    # Con la zona deshabilitada (modo sin justificantes) la ayuda sigue funcionando.
+    ventana.no_jp_mode_var.set(True)
+    ventana._on_toggle_no_jp_mode()
+    zona = ventana.lbl_drop_jp
+    zona._mover_raton(_centro_ayuda(zona))
+    assert str(zona["cursor"]) == "hand2"  # aunque la zona no admita clics
+    assert zona.itemcget("ayuda_texto", "fill") == tema.PALETA.zonas["deshabilitada"].borde
+    zona._pulsar(_centro_ayuda(zona))
+    ventana.update()
+    assert ventana._ventana_ayuda.ayuda is ayuda.AYUDA_JP
+    ventana._ventana_ayuda.boton.invoke()  # "Entendido"
+    zona._mover_raton(SimpleNamespace(x=5, y=zona.winfo_height() - 5))
+    assert str(zona["cursor"]) == ""
+    ventana.reset_state()
+
+
+def test_pulsar_una_zona_abre_el_selector(ventana, monkeypatch):
+    pedidos = []
+
+    def elegir(**kwargs):
+        pedidos.append(kwargs["title"])
+        return str(EJ / "JP536.pdf")
+
+    monkeypatch.setattr(app_mod.filedialog, "askopenfilename", elegir)
+    _pulsar(ventana.lbl_drop_jp)
+    assert pedidos == ["Seleccionar PDF Justif. Pago"]
+    assert ventana.jp_pdf_path == EJ / "JP536.pdf"
+
+    # Deshabilitada (modo sin justificantes) no abre nada.
+    ventana.no_jp_mode_var.set(True)
+    ventana._on_toggle_no_jp_mode()
+    _pulsar(ventana.lbl_drop_jp)
+    assert pedidos == ["Seleccionar PDF Justif. Pago"]
+
+    # Soltar el boton fuera de la zona tampoco.
+    ventana.no_jp_mode_var.set(False)
+    ventana._on_toggle_no_jp_mode()
+    ventana.lbl_drop_jp._pulsar(SimpleNamespace(x=-5, y=5))
+    assert len(pedidos) == 1
+
+
+def test_zonas_bloqueadas_mientras_analiza(ventana):
+    assert ventana._aplicar_origen([(FIXTURES / "origen_contenedor_ok.pdf").resolve()]) == ""
+    ventana._set_jp_pdf(EJ / "JP536.pdf")
+    ventana._set_excel(EJ / "DATOS JG.xlsx")
+    ventana.analyze()
+    zonas = (ventana.lbl_drop_origin, ventana.lbl_drop_jp, ventana.lbl_drop_excel)
+    assert not any(z.habilitada for z in zonas)
+    _esperar_tarea(ventana)
+    assert all(z.habilitada for z in zonas)
+
+
+def _separador(tree):
+    """Coordenadas de la primera separacion entre encabezados."""
+    for x in range(1, tree.winfo_width()):
+        if tree.identify_region(x, 8) == "separator":
+            return x, 8
+    raise AssertionError("No se encuentra ninguna separacion")
+
+
+def test_cursor_de_redimensionar_columnas(ventana):
+    _analizar(ventana)
+    tree = ventana.tree_main
+    columnas = tree.columnas_ajustables
+    x, y = _separador(tree)
+    columnas._mover_raton(SimpleNamespace(x=x, y=y))
+    assert str(tree["cursor"]) == "sb_h_double_arrow"
+    x_celda, y_celda, _w, _h = tree.bbox(tree.get_children()[0], "fecha")
+    columnas._mover_raton(SimpleNamespace(x=x_celda + 5, y=y_celda + 5))
+    assert str(tree["cursor"]) == ""
+
+
+@pytest.mark.parametrize("columna, cambio", [("concepto", 200), ("beneficiario", -100), ("factura", 300)])
+def test_redimensionar_columna_mantiene_la_tabla_dentro(ventana, columna, cambio):
+    _analizar(ventana)
+    tree = ventana.tree_main
+    ventana.update()
+    columnas = tree.columnas_ajustables
+    pesos_originales = dict(columnas.pesos)
+    pedido = int(tree.column(columna, "width")) + cambio
+
+    tree.column(columna, width=pedido)  # lo que hace Tk al arrastrar la separacion
+    columnas.columna_redimensionada(columna, pedido)
+
+    anchos = {c: int(tree.column(c, "width")) for c in tree["columns"]}
+    assert sum(anchos.values()) <= tree.winfo_width()
+    assert anchos[columna] == pedido
+    assert min(anchos[c] for c in ("beneficiario", "concepto", "jg_candidates")) >= app_mod.ANCHO_MINIMO_AJUSTABLE
+
+    # Al cambiar el tamano de la ventana se mantienen las proporciones elegidas.
+    if columna in columnas.pesos:
+        proporcion = anchos[columna] / sum(anchos[c] for c in columnas.pesos)
+        ventana.geometry("1700x860+0+0")
+        ventana.update()
+        nuevos = {c: int(tree.column(c, "width")) for c in columnas.pesos}
+        assert abs(nuevos[columna] / sum(nuevos.values()) - proporcion) < 0.01
+        ventana.geometry("1500x860+0+0")
+        ventana.update()
+    # Deja la tabla como al principio para los demas tests.
+    columnas.pesos = pesos_originales
+    tree.column("factura", width=140)
+    columnas.ajustar()
+
+
+@pytest.mark.parametrize("ancho", [1200, 1500, 1900])
+def test_tablas_sin_barra_horizontal(ventana, ancho):
+    _analizar(ventana)
+    ventana.geometry(f"{ancho}x860+0+0")
+    for tree in (ventana.tree_main, ventana.tree_unassigned_excel):
+        assert not str(tree["xscrollcommand"])
+        ventana.tabs.select(tree.master.master)
+        ventana.update()
+        anchos = [int(tree.column(c, "width")) for c in tree["columns"]]
+        assert sum(anchos) <= tree.winfo_width(), (ancho, anchos, tree.winfo_width())
+        # Las columnas que se ajustan no bajan del minimo.
+        assert min(int(tree.column(c, "width")) for c in ("beneficiario", "concepto")) >= app_mod.ANCHO_MINIMO_AJUSTABLE
+    ventana.tabs.select(0)
+    ventana.geometry("1500x860+0+0")
+    ventana.update()
 
 
 def test_reiniciar(ventana):

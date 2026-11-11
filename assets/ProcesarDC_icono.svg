@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Generator: Adobe Illustrator 27.1.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
+<svg version="1.1" id="Capa_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 viewBox="0 0 256 256" style="enable-background:new 0 0 256 256;" xml:space="preserve">
+<style type="text/css">
+	.st0{fill:#0B5CAD;}
+	.st1{fill:#74A2D1;}
+	.st2{fill:#9DB8D9;}
+	.st3{fill:#FFFFFF;}
+	.st4{fill:none;stroke:#9DB8D9;stroke-width:12;stroke-linecap:round;}
+	.st5{fill:url(#SVGID_1_);}
+	.st6{fill:#1F9D55;}
+	.st7{fill:none;stroke:#FFFFFF;stroke-width:15;stroke-linecap:round;stroke-linejoin:round;}
+</style>
+<path class="st0" d="M213.6,102.5h-73h-29.7v-6.3c0-8.9-7.2-16.1-16.1-16.1H36.4c-8.9,0-16.1,7.2-16.1,16.1v6.3v5.8v14.4v31.2V185
+	c0,11.1,9,20.1,20.1,20.1h173.2c11.1,0,20.1-9,20.1-20.1v-62.4C233.8,111.5,224.7,102.5,213.6,102.5z"/>
+<g id="Documentos">
+	<g id="Hoja_detras_00000065054343956086256680000004270355088914785970_">
+		<path class="st1" d="M100.3,14.1h91.6c5.5,0,9.9,4.4,9.9,9.9v153.5c0,5.5-4.4,9.9-9.9,9.9h-91.6c-5.5,0-9.9-4.4-9.9-9.9V24
+			C90.4,18.5,94.9,14.1,100.3,14.1z"/>
+	</g>
+	<g id="Hoja_detras">
+		<path class="st2" d="M83.7,26.9h91.6c5.5,0,9.9,4.4,9.9,9.9v153.5c0,5.5-4.4,9.9-9.9,9.9H83.7c-5.5,0-9.9-4.4-9.9-9.9V36.8
+			C73.8,31.3,78.3,26.9,83.7,26.9z"/>
+	</g>
+	<g>
+		<g id="Hoja_delante">
+			<path class="st3" d="M66.4,39.7H158c5.5,0,9.9,4.4,9.9,9.9v153.5c0,5.5-4.4,9.9-9.9,9.9H66.4c-5.5,0-9.9-4.4-9.9-9.9V49.6
+				C56.5,44.1,60.9,39.7,66.4,39.7z"/>
+		</g>
+		<g id="Renglones">
+			<line class="st4" x1="78.8" y1="71.9" x2="145.6" y2="71.9"/>
+			<line class="st4" x1="78.8" y1="99.1" x2="145.6" y2="99.1"/>
+			<line class="st4" x1="78.8" y1="126.3" x2="115.5" y2="126.3"/>
+		</g>
+	</g>
+</g>
+<linearGradient id="SVGID_1_" gradientUnits="userSpaceOnUse" x1="126.9999" y1="130.6301" x2="126.9999" y2="255.7785">
+	<stop  offset="0" style="stop-color:#3A97EE"/>
+	<stop  offset="1" style="stop-color:#1565C0"/>
+</linearGradient>
+<path class="st5" d="M213.6,131.7h-73h-29.7v-6.3c0-8.9-7.2-16.1-16.1-16.1H36.4c-8.9,0-16.1,7.2-16.1,16.1v6.3v5.8v14.4V183v31.2
+	c0,11.1,9,20.1,20.1,20.1h173.2c11.1,0,20.1-9,20.1-20.1v-62.4C233.8,140.7,224.7,131.7,213.6,131.7z"/>
+<g id="Check">
+	<circle class="st3" cx="199" cy="203" r="46"/>
+	<circle class="st6" cx="199" cy="203" r="38"/>
+	<polyline class="st7" points="179,204 193,218 219,189 	"/>
+</g>
+</svg>
