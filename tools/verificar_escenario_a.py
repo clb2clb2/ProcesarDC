@@ -14,7 +14,7 @@ EXPECTED_FILES = {
 }
 
 FORBIDDEN_FILES = {
-    "origen_contenedor_ok.pdf",
+    "DOC contenedor ok.pdf",
 }
 
 

@@ -1,11 +1,21 @@
-"""Escaneo de los PDFs origen: secciones por marcador o PDFs copiados tal cual.
+"""Escaneo de los PDFs de origen: que documento es cada archivo o cada marcador.
 
-Reglas:
-- Un PDF cuyo nombre empieza por DC/CJ/RT + digitos se trata como archivo directo
-  (se ignoran sus marcadores internos).
-- Un PDF sin marcadores tambien es archivo directo, con su nombre como titulo.
-- Si tiene marcadores, cada marcador abre una seccion hasta el siguiente marcador.
-  Los titulos numericos son JG; los demas se clasifican como DC/CJ/RT/OTHER.
+Codigos (en nombres de archivo y en marcadores, sin distinguir mayusculas):
+- DC, CJ o RT seguido de numeros (y cualquier cosa detras): Documento Contable, Cuenta
+  Justificativa o Relacion de Transferencias, con el numero que sigue a las letras.
+- Justificante de gasto (JG): un marcador que es un numero (5270, 05283) o JG + numero
+  (JG5270); un archivo cuyo nombre es JG + numero (JG5270.pdf, JG5270 algo.pdf).
+
+Reglas por archivo:
+- Nombre que empieza por DC/CJ/RT + numeros: ese documento, entero (sus marcadores se ignoran).
+- Nombre que empieza por "DOC " (DOC y un espacio): contiene varios documentos; cada marcador
+  abre uno (DC/CJ/RT, JG o, si no es un codigo, un documento con el nombre del marcador).
+- Nombre que empieza por "JG": si tiene marcadores de JG, cada uno abre un justificante y no
+  puede haber otros marcadores; si no los tiene, el nombre JG + numero lo hace un solo JG.
+- Cualquier otro nombre: se archiva entero con su nombre (sus marcadores se ignoran).
+
+En los archivos "DOC" y "JG" partidos por marcadores, todas las paginas deben pertenecer a
+algun marcador: si hay paginas antes del primero, la carga se rechaza.
 """
 
 from __future__ import annotations
@@ -58,53 +68,140 @@ class EscaneoOrigen:
         return ""
 
 
+# Tipos de archivo segun su nombre.
+ARCHIVO_CODIGO = "codigo"  # DC/CJ/RT + numeros
+ARCHIVO_DOC = "doc"  # "DOC ": varios documentos con marcadores
+ARCHIVO_JG = "jg"  # "JG...": justificantes de gasto
+ARCHIVO_OTRO = "otro"
+
+
+def tipo_de_archivo(stem: str) -> str:
+    nombre = str(stem or "").strip()
+    if es_nombre_con_prefijo(nombre):
+        return ARCHIVO_CODIGO
+    if re.match(r"^DOC\s", nombre, flags=re.IGNORECASE):
+        return ARCHIVO_DOC
+    if nombre.upper().startswith("JG"):
+        return ARCHIVO_JG
+    return ARCHIVO_OTRO
+
+
+def numero_jg_de_marcador(titulo: str) -> str:
+    """"5270", "05283" o "JG5270" -> numero de JG sin ceros a la izquierda; "" si no lo es."""
+    match = re.match(r"^(?:JG)?(\d+)$", normalizar_titulo(titulo), flags=re.IGNORECASE)
+    return (match.group(1).lstrip("0") or "0") if match else ""
+
+
+def numero_jg_de_nombre(stem: str) -> str:
+    """"JG5270 algo" -> "5270"; "" si el nombre no es JG + numeros."""
+    return numero_con_prefijo(stem, "JG")
+
+
 def escanear_origen(files: list[Path]) -> EscaneoOrigen:
     escaneo = EscaneoOrigen()
 
     for pdf_path in files:
-        if es_nombre_con_prefijo(pdf_path.stem):
-            escaneo.secciones.append(_archivo_directo(pdf_path))
-            continue
-
         try:
             reader = PdfReader(str(pdf_path))
-            entries = _entradas_marcadores(reader, reader.outline)
+            total = len(reader.pages)
+            marcadores = _entradas_marcadores(reader, reader.outline)
         except Exception as exc:
-            escaneo.errores.append(f"No se pudo leer el PDF de origen '{pdf_path.name}': {exc}")
+            escaneo.errores.append(f"No se pudo leer el PDF '{pdf_path.name}': {exc}")
             continue
 
-        if not entries:
-            if pdf_path.stem.strip():
-                escaneo.secciones.append(_archivo_directo(pdf_path))
-            continue
-
-        total_pages = len(reader.pages)
-        entries_sorted = sorted(entries, key=lambda it: (it[1], it[2]))
-        for idx, (title_raw, start_page, _order) in enumerate(entries_sorted):
-            end_page = entries_sorted[idx + 1][1] if idx + 1 < len(entries_sorted) else total_pages
-            # Marcadores fuera de rango o que comparten pagina con el siguiente: se ignoran.
-            if start_page < 0 or end_page > total_pages or start_page >= end_page:
-                continue
-
-            title = normalizar_titulo(title_raw)
-            if not title:
-                continue
-
-            is_numeric = title.isdigit()
-            escaneo.secciones.append(
-                OriginSection(
-                    source_path=pdf_path,
-                    title=title,
-                    start_page=start_page,
-                    end_page=end_page,
-                    is_numeric=is_numeric,
-                    numeric_id=(title.lstrip("0") or "0") if is_numeric else "",
-                    category="JG" if is_numeric else clasificar_titulo(title),
-                    from_marker=True,
-                )
-            )
+        tipo = tipo_de_archivo(pdf_path.stem)
+        if tipo == ARCHIVO_DOC:
+            _escanear_doc(escaneo, pdf_path, marcadores, total)
+        elif tipo == ARCHIVO_JG:
+            _escanear_jg(escaneo, pdf_path, marcadores, total)
+        elif pdf_path.stem.strip():
+            escaneo.secciones.append(_archivo_directo(pdf_path))
 
     return escaneo
+
+
+def _escanear_doc(escaneo: EscaneoOrigen, pdf_path: Path, marcadores, total: int) -> None:
+    tramos = _tramos(marcadores, total)
+    if not tramos:
+        escaneo.errores.append(
+            f"El archivo '{pdf_path.name}' empieza por «DOC», pero no tiene marcadores: cada documento "
+            "que contiene debe empezar con un marcador (DC…, CJ…, RT…, el número del justificante u otro nombre)."
+        )
+        return
+    if not _sin_paginas_huerfanas(escaneo, pdf_path, tramos):
+        return
+    for titulo, inicio, fin in tramos:
+        numero_jg = numero_jg_de_marcador(titulo)
+        if numero_jg:
+            escaneo.secciones.append(_seccion_jg(pdf_path, titulo, numero_jg, inicio, fin, desde_marcador=True))
+        else:
+            escaneo.secciones.append(
+                OriginSection(pdf_path, titulo, inicio, fin, False, "", clasificar_titulo(titulo), True)
+            )
+
+
+def _escanear_jg(escaneo: EscaneoOrigen, pdf_path: Path, marcadores, total: int) -> None:
+    if any(numero_jg_de_marcador(titulo) for titulo, _pagina, _orden in marcadores):
+        for titulo, pagina, _orden in marcadores:
+            if normalizar_titulo(titulo) and not numero_jg_de_marcador(titulo):
+                escaneo.errores.append(
+                    f"El archivo '{pdf_path.name}' tiene el marcador «{normalizar_titulo(titulo)}» (página "
+                    f"{pagina + 1}), que no es un número de justificante de gasto. En un archivo «JG» todos "
+                    "los marcadores deben ser números de justificante (por ejemplo, 5270 o JG5270)."
+                )
+                return
+        tramos = _tramos(marcadores, total)
+        if not _sin_paginas_huerfanas(escaneo, pdf_path, tramos):
+            return
+        for titulo, inicio, fin in tramos:
+            escaneo.secciones.append(
+                _seccion_jg(pdf_path, titulo, numero_jg_de_marcador(titulo), inicio, fin, desde_marcador=True)
+            )
+        return
+
+    numero_jg = numero_jg_de_nombre(pdf_path.stem)
+    if numero_jg:
+        # Un solo justificante con todas sus paginas (se extraen para poder anadirle sus pagos).
+        escaneo.secciones.append(
+            _seccion_jg(pdf_path, pdf_path.stem.strip(), numero_jg, 0, total, desde_marcador=False)
+        )
+        return
+    escaneo.errores.append(
+        f"El archivo '{pdf_path.name}' empieza por «JG», pero no tiene marcadores con números de "
+        "justificante ni un número detrás de «JG» en el nombre (por ejemplo, JG5270.pdf)."
+    )
+
+
+def _tramos(marcadores, total: int) -> list[tuple[str, int, int]]:
+    """(titulo, pagina inicial, pagina final excluida) de cada marcador, ordenados por pagina.
+
+    Se ignoran los marcadores sin titulo, fuera de rango o que comparten pagina con el siguiente.
+    """
+    ordenados = sorted(marcadores, key=lambda it: (it[1], it[2]))
+    tramos = []
+    for idx, (titulo_crudo, inicio, _orden) in enumerate(ordenados):
+        fin = ordenados[idx + 1][1] if idx + 1 < len(ordenados) else total
+        titulo = normalizar_titulo(titulo_crudo)
+        if titulo and 0 <= inicio < fin <= total:
+            tramos.append((titulo, inicio, fin))
+    return tramos
+
+
+def _sin_paginas_huerfanas(escaneo: EscaneoOrigen, pdf_path: Path, tramos) -> bool:
+    """Las paginas anteriores al primer marcador no irian a ningun documento: se rechaza."""
+    if tramos and tramos[0][1] > 0:
+        primera = tramos[0][1]
+        paginas = "la página 1" if primera == 1 else f"las páginas 1 a {primera}"
+        escaneo.errores.append(
+            f"El archivo '{pdf_path.name}' tiene {paginas} antes del primer marcador, y no irían a ningún "
+            "documento. Pon un marcador en la página 1 o quita esas páginas del PDF."
+        )
+        return False
+    return True
+
+
+def _seccion_jg(pdf_path: Path, titulo: str, numero: str, inicio: int, fin: int, desde_marcador: bool) -> OriginSection:
+    return OriginSection(pdf_path, titulo, inicio, fin, True, numero, "JG", desde_marcador)
 
 
 def validar_carga(escaneo: EscaneoOrigen) -> str:

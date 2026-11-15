@@ -73,14 +73,26 @@ def test_a_lineas_y_texto_plano():
     assert texto_plano(lineas) == "A ✔" + chr(10) + "B"
 
 
-def test_anillo_de_ayuda():
-    from procesardc.zona_soltar import pixeles_anillo
+def test_disco_de_ayuda():
+    from procesardc.zona_soltar import pixeles_disco
 
-    tam, color, fondo = 20, "#000000", "#ffffff"
-    px = pixeles_anillo(tam, 1.4, color, fondo)
+    tam, color, fondo = 24, "#000000", "#ffffff"
+    px = pixeles_disco(tam, color, fondo)
     assert len(px) == tam and all(len(f) == tam for f in px)
-    assert px[tam // 2][tam // 2] == fondo  # hueco central (ahi va el "?")
+    assert px[tam // 2][tam // 2] == color  # relleno (el "?" blanco va encima)
+    assert px[tam // 2][2] == color
     assert px[0][0] == fondo  # fuera del circulo
-    # En el trazo (borde izquierdo, a media altura) el pixel es oscuro.
-    r, g, b = (int(px[tam // 2][1][i : i + 2], 16) for i in (1, 3, 5))
-    assert r < 128 and g < 128 and b < 128
+    intermedios = {c for f in px for c in f} - {color, fondo}
+    assert intermedios  # borde suavizado
+
+
+def test_rayas_del_borde():
+    from procesardc.zona_soltar import rayas
+
+    tramos = rayas(10, 210, largo=8, hueco=6)
+    assert all(abs((b - a) - 8) < 1e-9 for a, b in tramos)
+    huecos = [tramos[0][0] - 10] + [b[0] - a[1] for a, b in zip(tramos, tramos[1:])] + [210 - tramos[-1][1]]
+    # Mismo hueco entre rayas y en los dos extremos, parecido al pedido.
+    assert max(huecos) - min(huecos) < 1e-9 and 4 <= huecos[0] <= 8
+    assert rayas(0, 5, largo=8) == [(0, 5)]  # lado mas corto que una raya
+    assert rayas(5, 5) == []

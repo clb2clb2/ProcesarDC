@@ -22,7 +22,7 @@ FIXTURES = EJ / "fixtures"
 # PDF grande (~75 MB) que no esta en el repositorio. Se puede indicar otra ruta con
 # la variable de entorno PROCESARDC_PDF_COMPLETO; si no existe, el escenario E se omite.
 PDF_COMPLETO = Path(
-    os.environ.get("PROCESARDC_PDF_COMPLETO", FIXTURES / "origen_contenedor_normal_completo.pdf")
+    os.environ.get("PROCESARDC_PDF_COMPLETO", FIXTURES / "DOC contenedor normal completo.pdf")
 )
 
 

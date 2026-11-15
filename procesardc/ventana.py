@@ -43,7 +43,7 @@ BaseTk = TkinterDnD.Tk if TkinterDnD else tk.Tk
 INTERVALO_TAREAS_MS = 50
 
 # Textos de las zonas de carga.
-TEXTO_ZONA_ORIGEN = "Arrastra aquí los PDFs de origen"
+TEXTO_ZONA_ORIGEN = "Arrastra aquí la documentación del DC"
 TEXTO_ZONA_JP = "Arrastra el PDF de justificantes de pago"
 TEXTO_ZONA_EXCEL = "Arrastra el Excel de datos de justif. de gasto"
 PISTA_CARGAR = "(o pulsa para cargar)"
@@ -101,6 +101,10 @@ def ruta_recurso(relativa: str) -> Path:
 
 
 RUTA_ICONO = "assets/procesardc.ico"
+# Ilustraciones de la ayuda: assets/ayuda/<nombre>@<escala>.png (tools/generar_ayuda.py).
+ESCALAS_AYUDA = (75, 100, 125, 150, 200)
+# Las ilustraciones se ven algo mas pequenas que su tamano nominal, para no dominar el texto.
+TAMANO_ILUSTRACIONES = 0.8
 
 
 class App(BaseTk):
@@ -314,7 +318,7 @@ class App(BaseTk):
         self.btn_process.pack(side=tk.LEFT)
         self._update_unassigned_tab_title()
 
-        self.status_var = tk.StringVar(value="Cargue PDF origen, JP y Excel para comenzar.")
+        self.status_var = tk.StringVar(value="Cargue la documentación del DC, el PDF de justificantes de pago y el Excel para comenzar.")
         ttk.Label(root, textvariable=self.status_var, padding=(0, 8, 0, 0)).pack(fill=tk.X)
 
         if not DND_FILES:
@@ -334,7 +338,23 @@ class App(BaseTk):
         return zona
 
     def _mostrar_ayuda(self, ayuda_zona: ayuda.Ayuda, zona: ZonaSoltar) -> ayuda.VentanaAyuda:
-        return ayuda.mostrar(self, ayuda_zona, zona, fuente=tema.FUENTE, fuente_titulo=tema.FUENTE_TITULO)
+        return ayuda.mostrar(
+            self, ayuda_zona, zona, fuente=tema.FUENTE, fuente_negrita=tema.FUENTE_NEGRITA,
+            fuente_titulo=tema.FUENTE_TITULO, imagen=self._imagen_ayuda,
+        )
+
+    def _imagen_ayuda(self, nombre: str) -> tk.PhotoImage | None:
+        """Ilustracion de la ayuda a la escala mas cercana a la de la pantalla (None si falta)."""
+        cache = self.__dict__.setdefault("_imagenes_ayuda", {})
+        if nombre not in cache:
+            escala_pantalla = self.winfo_fpixels("1i") / 96 * 100 * TAMANO_ILUSTRACIONES
+            escala = min(ESCALAS_AYUDA, key=lambda e: abs(e - escala_pantalla))
+            ruta = ruta_recurso(f"assets/ayuda/{nombre}@{escala}.png")
+            try:
+                cache[nombre] = tk.PhotoImage(master=self, file=str(ruta)) if ruta.exists() else None
+            except tk.TclError:
+                cache[nombre] = None
+        return cache[nombre]
 
     @staticmethod
     def _wire_drop(widget: ZonaSoltar, handler) -> None:
@@ -463,7 +483,7 @@ class App(BaseTk):
 
     def load_origin_pdfs(self) -> None:
         paths = filedialog.askopenfilenames(
-            title="Seleccionar PDFs origen",
+            title="Seleccionar la documentación del DC",
             initialdir=str(self.ej_dir if self.ej_dir.exists() else self.base_dir),
             filetypes=[("PDF", "*.pdf")],
         )
@@ -476,7 +496,7 @@ class App(BaseTk):
     def _set_origin_pdfs(self, files: list[Path]) -> None:
         unique_sorted = sorted({f.resolve() for f in files if f.exists()}, key=lambda p: p.name.lower())
         if not unique_sorted:
-            messagebox.showwarning("Aviso", "No se han seleccionado PDFs origen validos.")
+            messagebox.showwarning("Aviso", "No se han seleccionado PDF válidos de documentación del DC.")
             return
 
         error_message = self._aplicar_origen(unique_sorted)
@@ -486,7 +506,7 @@ class App(BaseTk):
 
         self.lbl_drop_origin.set_texto(resumen_origen(self.origin_scan), pista="")
 
-        self.status_var.set(f"PDFs origen cargados: {len(self.origin_pdf_paths)}")
+        self.status_var.set(f"Documentación del DC cargada: {len(self.origin_pdf_paths)} PDF.")
         self._update_action_buttons()
 
     def load_jp_pdf(self) -> None:
@@ -979,7 +999,7 @@ class App(BaseTk):
         self.main_row_by_iid = {}
         self._update_unassigned_tab_title()
         self.detail_var.set("Seleccione una fila en rojo para ver el detalle de diferencias (JP/JG).")
-        self.status_var.set("Estado reiniciado. Cargue PDF origen, JP y Excel para comenzar.")
+        self.status_var.set("Estado reiniciado. Cargue la documentación del DC, el PDF de justificantes de pago y el Excel para comenzar.")
         self._update_action_buttons()
 
     def confirm_reset_state(self) -> None:

@@ -24,7 +24,7 @@ def contenido(carpeta) -> dict[str, int]:
 
 
 def test_escenario_a_contenedor_sin_justificantes(app_sin_ui, tmp_path):
-    assert cargar_origen(app_sin_ui, FIXTURES / "origen_contenedor_ok.pdf") == ""
+    assert cargar_origen(app_sin_ui, FIXTURES / "DOC contenedor ok.pdf") == ""
     campos = {k: v.get() for k, v in app_sin_ui.field_vars.items()}
     assert campos == {"anio": "", "dc": "1234", "cj": "5678"}
     assert texto_plano(app_mod.resumen_origen(app_sin_ui.origin_scan)) == (
@@ -51,9 +51,9 @@ def test_escenario_a_contenedor_sin_justificantes(app_sin_ui, tmp_path):
 @pytest.mark.parametrize(
     "origenes",
     [
-        pytest.param(["origen_conflicto_texto_duplicado.pdf"], id="B-texto-duplicado"),
-        pytest.param(["origen_conflicto_jg_duplicado.pdf"], id="C-jg-duplicado"),
-        pytest.param(["origen_contenedor_ok.pdf", "ANEXO.pdf"], id="D-marcador-vs-archivo"),
+        pytest.param(["DOC conflicto texto duplicado.pdf"], id="B-texto-duplicado"),
+        pytest.param(["DOC conflicto jg duplicado.pdf"], id="C-jg-duplicado"),
+        pytest.param(["DOC contenedor ok.pdf", "ANEXO.pdf"], id="D-marcador-vs-archivo"),
     ],
 )
 def test_escenarios_de_conflicto(app_sin_ui, origenes):
@@ -62,18 +62,18 @@ def test_escenarios_de_conflicto(app_sin_ui, origenes):
 
 
 def test_dos_documentos_contables(app_sin_ui):
-    error = cargar_origen(app_sin_ui, FIXTURES / "origen_contenedor_ok.pdf", EJ / "DC3391.pdf")
+    error = cargar_origen(app_sin_ui, FIXTURES / "DOC contenedor ok.pdf", EJ / "DC3391.pdf")
     assert error == "¡Atención! Debes cargar un solo archivo de Documento Contable (DC)."
 
 
 def _contenedor_solo_jg(tmp_path):
-    origen = PdfReader(str(FIXTURES / "origen_contenedor_ok.pdf"))
+    origen = PdfReader(str(FIXTURES / "DOC contenedor ok.pdf"))
     writer = PdfWriter()
     writer.add_page(origen.pages[4])
     writer.add_page(origen.pages[5])
     writer.add_outline_item("5270", 0)
     writer.add_outline_item("05283", 1)
-    ruta = tmp_path / "justificantes.pdf"
+    ruta = tmp_path / "JG justificantes.pdf"
     with open(ruta, "wb") as fh:
         writer.write(fh)
     return ruta

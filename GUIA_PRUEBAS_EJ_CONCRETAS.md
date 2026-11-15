@@ -7,7 +7,7 @@ Los escenarios A-E y el cruce JP/Excel estan cubiertos por tests en `tests/`:
     pip install -r requirements-dev.txt
     python -m pytest
 
-- El escenario E se omite si no existe `ej/fixtures/origen_contenedor_normal_completo.pdf`
+- El escenario E se omite si no existe `ej/fixtures/DOC contenedor normal completo.pdf`
   (o la ruta indicada en la variable de entorno `PROCESARDC_PDF_COMPLETO`).
 - `tests/datos/cruce_esperado.json` fija el resultado del analisis para los JP y Excel de `ej/`.
   Si se cambian las reglas del cruce a proposito, se regenera con
@@ -20,13 +20,13 @@ Esta guia usa archivos ya disponibles en la carpeta ej y fixtures generados en e
 ## Archivos a usar
 
 Origen:
-- ej/fixtures/origen_contenedor_ok.pdf
-- ej/fixtures/origen_contenedor_normal_completo.pdf
-- ej/fixtures/origen_conflicto_texto_duplicado.pdf
-- ej/fixtures/origen_conflicto_jg_duplicado.pdf
+- ej/fixtures/DOC contenedor ok.pdf
+- ej/fixtures/DOC contenedor normal completo.pdf
+- ej/fixtures/DOC conflicto texto duplicado.pdf
+- ej/fixtures/DOC conflicto jg duplicado.pdf
 - ej/fixtures/ANEXO.pdf
 
-Nota: `ej/JG 5270-7063(25+1).pdf` y `ej/fixtures/origen_contenedor_normal_completo.pdf`
+Nota: `ej/JG 5270-7063(25+1).pdf` y `ej/fixtures/DOC contenedor normal completo.pdf`
 no estan en el repositorio por tamano (~75 MB cada uno). Para preparar el escenario E:
 
 1. Recuperar el PDF de JG del historial:
@@ -46,7 +46,7 @@ Objetivo:
 Pasos:
 1. Abrir ProcesarDC.
 2. Activar la casilla DC sin justificantes de pago.
-3. Cargar como PDFs origen solo ej/fixtures/origen_contenedor_ok.pdf.
+3. Cargar como PDFs origen solo ej/fixtures/DOC contenedor ok.pdf.
 4. Pulsar Procesar y elegir carpeta destino.
 5. Si pide ano, confirmar 2026.
 
@@ -59,7 +59,7 @@ Salida esperada:
 - JG5283.pdf
 
 Validacion:
-- El contenedor origen_contenedor_ok.pdf no debe copiarse al destino.
+- El contenedor DOC contenedor ok.pdf no debe copiarse al destino.
 - No deben aparecer errores de conflicto.
 
 ## Escenario B - Error por marcador no numerico duplicado
@@ -69,7 +69,7 @@ Objetivo:
 
 Pasos:
 1. Activar modo sin justificantes.
-2. Cargar como origen solo ej/fixtures/origen_conflicto_texto_duplicado.pdf.
+2. Cargar como origen solo ej/fixtures/DOC conflicto texto duplicado.pdf.
 3. Intentar procesar.
 
 Resultado esperado:
@@ -83,7 +83,7 @@ Objetivo:
 
 Pasos:
 1. Activar modo sin justificantes.
-2. Cargar como origen solo ej/fixtures/origen_conflicto_jg_duplicado.pdf.
+2. Cargar como origen solo ej/fixtures/DOC conflicto jg duplicado.pdf.
 3. Intentar procesar.
 
 Resultado esperado:
@@ -97,7 +97,7 @@ Objetivo:
 Pasos:
 1. Activar modo sin justificantes.
 2. Cargar como origen estos dos PDFs a la vez:
-   - ej/fixtures/origen_contenedor_ok.pdf
+   - ej/fixtures/DOC contenedor ok.pdf
    - ej/fixtures/ANEXO.pdf
 3. Intentar procesar.
 
@@ -111,7 +111,7 @@ Objetivo:
 
 Pasos:
 1. Desactivar modo sin justificantes.
-2. Cargar como origen ej/fixtures/origen_contenedor_normal_completo.pdf.
+2. Cargar como origen ej/fixtures/DOC contenedor normal completo.pdf.
 3. Cargar JP: ej/JP536.pdf.
 4. Cargar Excel: ej/DATOS JG.xlsx.
 5. Pulsar Analizar.

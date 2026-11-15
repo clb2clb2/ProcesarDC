@@ -19,6 +19,7 @@ from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 
 from .modelos import OriginSection
+from .secciones import numero_con_prefijo
 
 PREFIJO_TEMPORAL = ".procesardc_"
 
@@ -72,13 +73,16 @@ def planificar(carpeta: Path, secciones: list[OriginSection], dc: int, cj: int) 
             nombre = f"DC{dc}.pdf"
         elif section.category == "CJ":
             nombre = f"CJ{cj}.pdf"
+        elif section.category == "RT":
+            nombre = f"RT{numero_con_prefijo(section.title, 'RT')}.pdf"
         elif section.from_marker:
             nombre = f"{nombre_seguro(section.title)}.pdf"
         else:
             nombre = section.source_path.name
 
         destino = carpeta / nombre
-        if section.from_marker:
+        # Las secciones con paginas (por marcador o JG entero) se extraen; el resto se copia.
+        if section.start_page is not None:
             plan.extracciones.append((section, destino))
         else:
             plan.copias.append((section.source_path, destino))

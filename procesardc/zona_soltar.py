@@ -20,9 +20,12 @@ PROPORCION_ICONO = 0.36
 MARGEN_ICONO = 20
 MARGEN_VERTICAL = 12  # minimo entre el texto y los bordes de arriba y abajo
 
-# Icono de ayuda ("?" en un circulo) en la esquina superior derecha.
-TAM_AYUDA = 20
-GROSOR_AYUDA = 1.4
+# Borde discontinuo: largo de cada raya y hueco aproximado entre rayas (en los lados rectos).
+LARGO_RAYA = 8
+HUECO_RAYA = 6
+
+# Icono de ayuda (circulo azul con "?" blanco) en la esquina superior derecha.
+TAM_AYUDA = 24
 MARGEN_AYUDA = 8
 HOLGURA_AYUDA = 4  # pixeles alrededor del icono que tambien cuentan como clic en el
 
@@ -54,6 +57,19 @@ class EstiloZona:
     icono: str
     si: str  # marca ✔
     no: str  # marca ✖
+    ayuda: str = "#005FB8"  # circulo del icono de ayuda
+    ayuda_encima: str = "#2B88E0"  # ... con el raton encima
+
+
+def rayas(inicio: float, fin: float, largo: float = LARGO_RAYA, hueco: float = HUECO_RAYA) -> list[tuple[float, float]]:
+    """Rayas de `largo` repartidas entre inicio y fin, con el mismo hueco entre ellas y en
+    los dos extremos (asi cada lado empieza y acaba igual junto a las esquinas)."""
+    total = fin - inicio
+    if total <= largo:
+        return [(inicio, fin)] if total > 0 else []
+    n = max(1, round((total - hueco) / (largo + hueco)))
+    separacion = (total - n * largo) / (n + 1)
+    return [(inicio + separacion + i * (largo + separacion), inicio + (i + 1) * (largo + separacion)) for i in range(n)]
 
 
 # Texto con estilos: lineas formadas por trozos (texto, estilo).
@@ -155,17 +171,17 @@ def pixeles_icono(tam: int, color: str, fondo: str) -> list[list[str]]:
     return filas
 
 
-def pixeles_anillo(tam: int, grosor: float, color: str, fondo: str) -> list[list[str]]:
-    """Circunferencia de tam x tam pixeles y `grosor` de trazo, suavizada."""
+def pixeles_disco(tam: int, color: str, fondo: str) -> list[list[str]]:
+    """Circulo relleno de tam x tam pixeles, con el borde suavizado."""
     c_color, c_fondo = _rgb(color), _rgb(fondo)
     centro = tam / 2
-    radio = tam / 2 - grosor / 2 - 0.5
+    radio = tam / 2 - 0.5
     filas = []
     for y in range(tam):
         fila = []
         for x in range(tam):
             d = ((x + 0.5 - centro) ** 2 + (y + 0.5 - centro) ** 2) ** 0.5
-            cobertura = max(0.0, min(1.0, grosor / 2 - abs(d - radio) + 0.5))
+            cobertura = max(0.0, min(1.0, radio - d + 0.5))
             fila.append(_mezclar(c_fondo, c_color, cobertura))
         filas.append(fila)
     return filas
@@ -318,18 +334,18 @@ class ZonaSoltar(tk.Canvas):
         return self._imagenes[clave]
 
     def _dibujar_ayuda(self, e: EstiloZona) -> None:
-        """Icono "?" en un circulo; en el color del borde con el raton encima."""
+        """Circulo azul con "?" blanco; un azul mas claro con el raton encima."""
         self.delete("ayuda")
         if self._al_ayuda is None:
             return
-        color = e.borde if self._raton_en_ayuda else e.pista
+        color = e.ayuda_encima if self._raton_en_ayuda else e.ayuda
         clave = ("ayuda", color, e.fondo)
         if clave not in self._imagenes:
-            self._imagenes[clave] = _imagen(self, pixeles_anillo(TAM_AYUDA, GROSOR_AYUDA, color, e.fondo))
+            self._imagenes[clave] = _imagen(self, pixeles_disco(TAM_AYUDA, color, e.fondo))
         cx = self.winfo_width() - MARGEN_AYUDA - TAM_AYUDA / 2
         cy = MARGEN_AYUDA + TAM_AYUDA / 2
-        self.create_image(cx, cy, image=self._imagenes[clave], tags="ayuda")
-        self.create_text(cx, cy, text="?", font=self._fuente_ayuda, fill=color, tags=("ayuda", "ayuda_texto"))
+        self.create_image(cx, cy, image=self._imagenes[clave], tags=("ayuda", "ayuda_circulo"))
+        self.create_text(cx, cy, text="?", font=self._fuente_ayuda, fill="#FFFFFF", tags=("ayuda", "ayuda_texto"))
 
     def _dibujar_texto(self, centro_x: float, ancho_texto: float, e: EstiloZona) -> float:
         """Dibuja las lineas desde y=0, cada renglon centrado; devuelve la y final.
@@ -369,16 +385,16 @@ class ZonaSoltar(tk.Canvas):
         e = self._estilos[self.estado]
         g = e.grosor_borde
 
-        # Relleno y bordes rectos (los rectangulos de Tk cubren [x0, x1) con outline vacio).
+        # Relleno (los rectangulos de Tk cubren [x0, x1) con outline vacio).
         self.create_rectangle(r, 0, ancho - r, alto, fill=e.fondo, outline="")
         self.create_rectangle(0, r, ancho, alto - r, fill=e.fondo, outline="")
-        for x0, y0, x1, y1 in (
-            (r, 0, ancho - r, g),
-            (r, alto - g, ancho - r, alto),
-            (0, r, g, alto - r),
-            (ancho - g, r, ancho, alto - r),
-        ):
-            self.create_rectangle(x0, y0, x1, y1, fill=e.borde, outline="")
+        # Borde discontinuo en los lados rectos; los arcos de las esquinas hacen de raya.
+        for a, b in rayas(r, ancho - r):
+            self.create_rectangle(a, 0, b, g, fill=e.borde, outline="", tags="raya")
+            self.create_rectangle(a, alto - g, b, alto, fill=e.borde, outline="", tags="raya")
+        for a, b in rayas(r, alto - r):
+            self.create_rectangle(0, a, g, b, fill=e.borde, outline="", tags="raya")
+            self.create_rectangle(ancho - g, a, ancho, b, fill=e.borde, outline="", tags="raya")
 
         si, sd, ii, id_ = self._esquinas(e)
         self.create_image(0, 0, image=si, anchor="nw")

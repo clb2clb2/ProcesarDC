@@ -52,7 +52,7 @@ def _estado_botones(w):
     return {nombre: str(getattr(w, nombre)["state"]) for nombre in ("btn_analyze", "btn_process", "btn_reset")}
 
 
-def _analizar(w, excel="DATOS JG.xlsx", origen="origen_contenedor_ok.pdf"):
+def _analizar(w, excel="DATOS JG.xlsx", origen="DOC contenedor ok.pdf"):
     assert w._aplicar_origen([(FIXTURES / origen).resolve()]) == ""
     w._set_jp_pdf(EJ / "JP536.pdf")
     w._set_excel(EJ / excel)
@@ -268,7 +268,7 @@ def test_zonas_de_carga_textos_y_estados(ventana):
     ventana.update()
     assert not hasattr(ventana, "btn_load_jp")  # los botones de carga ya no existen
     assert (zona.texto, zona.pista) == ("Arrastra el PDF de justificantes de pago", "(o pulsa para cargar)")
-    assert ventana.lbl_drop_origin.texto == "Arrastra aquí los PDFs de origen"
+    assert ventana.lbl_drop_origin.texto == "Arrastra aquí la documentación del DC"
     assert ventana.lbl_drop_excel.texto == "Arrastra el Excel de datos de justif. de gasto"
     assert zona.itemcget("pista", "text") == "(o pulsa para cargar)"
     assert str(zona["cursor"]) == "hand2"
@@ -330,7 +330,7 @@ def test_zona_de_origen_muestra_lo_detectado(ventana):
 
     from procesardc import tema
 
-    ventana._set_origin_pdfs([FIXTURES / "origen_contenedor_ok.pdf"])
+    ventana._set_origin_pdfs([FIXTURES / "DOC contenedor ok.pdf"])
     ventana.update()
     zona = ventana.lbl_drop_origin
     assert zona.texto == (
@@ -397,7 +397,13 @@ def test_icono_de_ayuda_en_las_tres_zonas(ventana, monkeypatch):
     zona = ventana.lbl_drop_jp
     zona._mover_raton(_centro_ayuda(zona))
     assert str(zona["cursor"]) == "hand2"  # aunque la zona no admita clics
-    assert zona.itemcget("ayuda_texto", "fill") == tema.PALETA.zonas["deshabilitada"].borde
+    # Circulo azul con "?" blanco; con el raton encima, el circulo cambia de tono.
+    assert zona.itemcget("ayuda_texto", "fill").lower() == "#ffffff"
+    circulo_encima = zona.itemcget("ayuda_circulo", "image")
+    zona._mover_raton(SimpleNamespace(x=5, y=zona.winfo_height() - 5))
+    assert zona.itemcget("ayuda_circulo", "image") != circulo_encima
+    assert tema.PALETA.zonas["deshabilitada"].ayuda == tema.PALETA.zonas["normal"].ayuda  # sigue en azul
+    zona._mover_raton(_centro_ayuda(zona))
     zona._pulsar(_centro_ayuda(zona))
     ventana.update()
     assert ventana._ventana_ayuda.ayuda is ayuda.AYUDA_JP
@@ -433,7 +439,7 @@ def test_pulsar_una_zona_abre_el_selector(ventana, monkeypatch):
 
 
 def test_zonas_bloqueadas_mientras_analiza(ventana):
-    assert ventana._aplicar_origen([(FIXTURES / "origen_contenedor_ok.pdf").resolve()]) == ""
+    assert ventana._aplicar_origen([(FIXTURES / "DOC contenedor ok.pdf").resolve()]) == ""
     ventana._set_jp_pdf(EJ / "JP536.pdf")
     ventana._set_excel(EJ / "DATOS JG.xlsx")
     ventana.analyze()
@@ -540,7 +546,7 @@ class Dialogos:
 
 def test_procesar_en_segundo_plano(ventana, monkeypatch, tmp_path):
     dialogos = Dialogos(monkeypatch, tmp_path, anio="2026")
-    assert ventana._aplicar_origen([(FIXTURES / "origen_contenedor_ok.pdf").resolve()]) == ""
+    assert ventana._aplicar_origen([(FIXTURES / "DOC contenedor ok.pdf").resolve()]) == ""
     ventana.no_jp_mode_var.set(True)
     ventana._on_toggle_no_jp_mode()
     ventana._update_action_buttons()
@@ -583,7 +589,7 @@ def test_procesar_modo_normal_anade_paginas_jp(ventana, monkeypatch, tmp_path):
 
 def test_procesar_fallido_avisa_y_desbloquea(ventana, monkeypatch, tmp_path):
     dialogos = Dialogos(monkeypatch, tmp_path, anio="2026")
-    assert ventana._aplicar_origen([(FIXTURES / "origen_contenedor_ok.pdf").resolve()]) == ""
+    assert ventana._aplicar_origen([(FIXTURES / "DOC contenedor ok.pdf").resolve()]) == ""
     ventana.no_jp_mode_var.set(True)
 
     def falla(*_a, **_k):
@@ -611,3 +617,35 @@ def test_analisis_fallido_avisa_y_desbloquea(ventana, monkeypatch, tmp_path):
     assert (tipo, titulo) == ("showerror", "Error")
     assert mensaje.startswith("Fallo durante el analisis:") and "no_existe.xlsx" in mensaje
     assert _estado_botones(ventana)["btn_reset"] == "normal"
+
+
+def test_ayuda_de_origen_con_ilustraciones(ventana, monkeypatch):
+    from procesardc import ayuda
+
+    ventana.update()
+    zona = ventana.lbl_drop_origin
+    zona._pulsar(_centro_ayuda(zona))
+    ventana.update()
+    texto = ventana._ventana_ayuda.texto
+    # Las dos ilustraciones van intercaladas en el texto, en orden.
+    assert texto.image_names() == ("origen_archivos_sueltos", "origen_un_solo_pdf")
+    # Los codigos van en negrita; los pasos llevan la flecha.
+    negritas = texto.tag_ranges("negrita")
+    trozos_negrita = [texto.get(negritas[i], negritas[i + 1]) for i in range(0, len(negritas), 2)]
+    assert {"“DC”", "“JG”", "“DOC ”", "Documento Contable", "PDF contenedor"} <= set(trozos_negrita)
+    assert texto.get("1.0", "end").count(ayuda.FLECHA) == 3
+    assert texto.get("1.0", "2.0").strip() == "Documentación del DC"
+    # Tras cada ilustracion queda un espacio amplio.
+    assert int(texto.tag_cget("imagen", "spacing3")) == ayuda.ESPACIO_TRAS_IMAGEN
+    assert str(texto["state"]) == "disabled"
+    # Alto limitado, con barra de desplazamiento porque el contenido no cabe.
+    assert ventana._ventana_ayuda.winfo_height() <= ayuda.ALTO_VENTANA
+    assert ventana._ventana_ayuda.barra.winfo_ismapped()
+    ventana._ventana_ayuda.destroy()
+
+    # Si falta un PNG, la ayuda se abre igual, sin esa imagen.
+    monkeypatch.setattr(ventana, "_imagen_ayuda", lambda nombre: None)
+    zona._pulsar(_centro_ayuda(zona))
+    ventana.update()
+    assert not ventana._ventana_ayuda.texto.image_names()
+    ventana._ventana_ayuda.destroy()

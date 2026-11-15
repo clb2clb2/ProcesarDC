@@ -36,7 +36,7 @@ def test_nombre_seguro(titulo, esperado):
 
 
 def test_plan_no_toca_el_disco(tmp_path):
-    plan = _plan(tmp_path, FIXTURES / "origen_contenedor_ok.pdf", FIXTURES / "ANEXO.pdf")
+    plan = _plan(tmp_path, FIXTURES / "DOC contenedor ok.pdf", FIXTURES / "ANEXO.pdf")
     assert not plan.carpeta.exists()
     # ANEXO por marcador y ANEXO.pdf directo acaban con el mismo nombre.
     assert [p.name for p in plan.duplicados()] == ["ANEXO.pdf"]
@@ -49,7 +49,7 @@ def test_duplicados_sin_distinguir_mayusculas(tmp_path):
 
 
 def test_genera_carpeta_nueva_y_anade_paginas_jp(tmp_path):
-    plan = _plan(tmp_path, FIXTURES / "origen_contenedor_ok.pdf")
+    plan = _plan(tmp_path, FIXTURES / "DOC contenedor ok.pdf")
     salida.generar(plan, EJ / "JP536.pdf", {"5270": [3, 1], "5283": [2]})
 
     jg5270 = plan.carpeta / "JG5270.pdf"
@@ -62,7 +62,7 @@ def test_genera_carpeta_nueva_y_anade_paginas_jp(tmp_path):
 
 
 def test_carpeta_existente_se_completa_sin_borrar_lo_demas(tmp_path):
-    plan = _plan(tmp_path, FIXTURES / "origen_contenedor_ok.pdf")
+    plan = _plan(tmp_path, FIXTURES / "DOC contenedor ok.pdf")
     plan.carpeta.mkdir(parents=True)
     (plan.carpeta / "DC1234.pdf").write_bytes(b"version antigua")
     (plan.carpeta / "notas.txt").write_text("no tocar", encoding="utf-8")
@@ -85,14 +85,14 @@ def test_carpeta_existente_se_completa_sin_borrar_lo_demas(tmp_path):
     ],
 )
 def test_asignaciones_invalidas_no_escriben_nada(tmp_path, paginas, error):
-    plan = _plan(tmp_path, FIXTURES / "origen_contenedor_ok.pdf")
+    plan = _plan(tmp_path, FIXTURES / "DOC contenedor ok.pdf")
     with pytest.raises(ValueError, match=error):
         salida.generar(plan, EJ / "JP536.pdf", paginas)
     assert list(tmp_path.iterdir()) == []
 
 
 def test_sin_pdf_jp_con_asignaciones(tmp_path):
-    plan = _plan(tmp_path, FIXTURES / "origen_contenedor_ok.pdf")
+    plan = _plan(tmp_path, FIXTURES / "DOC contenedor ok.pdf")
     with pytest.raises(ValueError, match="Falta el PDF"):
         salida.generar(plan, None, {"5270": [1]})
 
@@ -100,7 +100,7 @@ def test_sin_pdf_jp_con_asignaciones(tmp_path):
 @pytest.mark.parametrize("carpeta_previa", [False, True], ids=["carpeta-nueva", "carpeta-existente"])
 def test_fallo_a_mitad_no_deja_salida_parcial(tmp_path, monkeypatch, carpeta_previa):
     destino = tmp_path / "salida"
-    plan = _plan(destino, FIXTURES / "origen_contenedor_ok.pdf", EJ / "PARAM.pdf")
+    plan = _plan(destino, FIXTURES / "DOC contenedor ok.pdf", EJ / "PARAM.pdf")
     if carpeta_previa:
         plan.carpeta.mkdir(parents=True)
         (plan.carpeta / "DC1234.pdf").write_bytes(b"version antigua")

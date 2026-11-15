@@ -59,28 +59,28 @@ def jg_outline(reader: PdfReader, offset: int) -> list[tuple[str, int]]:
 
 # Caso OK: mezcla de no numericos y numericos en un unico contenedor.
 write_fixture(
-    "origen_contenedor_ok.pdf",
+    "DOC contenedor ok.pdf",
     [src_dc.pages[0], src_cj.pages[0], src_rt.pages[0], src_param.pages[0], src_jg.pages[0], src_jg.pages[1]],
     [("DC1234", 0), ("CJ5678", 1), ("RT9001", 2), ("ANEXO", 3), ("5270", 4), ("5283", 5)],
 )
 
 # Modo normal completo: DC + CJ + todo el PDF de JG con sus marcadores (escenario E).
 write_fixture(
-    "origen_contenedor_normal_completo.pdf",
+    "DOC contenedor normal completo.pdf",
     [src_dc.pages[0], src_cj.pages[0], *src_jg.pages],
     [("DC1234", 0), ("CJ5678", 1), *jg_outline(src_jg, offset=2)],
 )
 
 # Conflicto texto duplicado.
 write_fixture(
-    "origen_conflicto_texto_duplicado.pdf",
+    "DOC conflicto texto duplicado.pdf",
     [src_dc.pages[0], src_cj.pages[0], src_param.pages[0], src_rt.pages[0]],
     [("DC1234", 0), ("CJ5678", 1), ("ANEXO", 2), ("ANEXO", 3)],
 )
 
 # Conflicto JG numerico duplicado.
 write_fixture(
-    "origen_conflicto_jg_duplicado.pdf",
+    "DOC conflicto jg duplicado.pdf",
     [src_dc.pages[0], src_cj.pages[0], src_jg.pages[0], src_jg.pages[1]],
     [("DC1234", 0), ("CJ5678", 1), ("5270", 2), ("5270", 3)],
 )

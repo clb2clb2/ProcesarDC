@@ -39,8 +39,8 @@ def test_numero_con_prefijo_y_nombres():
 
 
 def test_escanear_contenedor():
-    escaneo = escanear_origen([FIXTURES / "origen_contenedor_ok.pdf"])
-    nombre = "origen_contenedor_ok.pdf"
+    escaneo = escanear_origen([FIXTURES / "DOC contenedor ok.pdf"])
+    nombre = "DOC contenedor ok.pdf"
     assert escaneo.errores == []
     assert _resumen(escaneo) == [
         (nombre, "DC1234", 0, 1, "", "DC", True),
@@ -60,15 +60,15 @@ def test_escanear_archivos_directos():
     assert _resumen(escaneo) == [
         # Tiene marcadores internos, pero el nombre DC#### manda.
         ("DC3391.pdf", "DC3391", None, None, "", "DC", False),
-        # Un unico marcador: se extrae como seccion.
-        ("PARAM.pdf", "PARAM", 0, 2, "", "OTHER", True),
+        # Tiene un marcador, pero su nombre no es DOC ni JG: se archiva entero.
+        ("PARAM.pdf", "PARAM", None, None, "", "OTHER", False),
         # Sin marcadores: archivo directo con su nombre.
         ("ANEXO.pdf", "ANEXO", None, None, "", "OTHER", False),
     ]
 
 
 def test_marcadores_desordenados_anidados_y_en_la_misma_pagina(tmp_path):
-    origen = PdfReader(str(FIXTURES / "origen_contenedor_ok.pdf"))
+    origen = PdfReader(str(FIXTURES / "DOC contenedor ok.pdf"))
     writer = PdfWriter()
     for page in origen.pages:
         writer.add_page(page)
@@ -78,17 +78,17 @@ def test_marcadores_desordenados_anidados_y_en_la_misma_pagina(tmp_path):
     writer.add_outline_item("5270", 3, parent=padre)
     writer.add_outline_item("TAPADO", 4)  # comparte pagina con el siguiente: se ignora
     writer.add_outline_item("CJ5678", 4)
-    ruta = tmp_path / "mezcla.pdf"
+    ruta = tmp_path / "DOC mezcla.pdf"
     with open(ruta, "wb") as fh:
         writer.write(fh)
 
     escaneo = escanear_origen([ruta])
     assert _resumen(escaneo) == [
-        ("mezcla.pdf", "DC1234", 0, 2, "", "DC", True),
-        ("mezcla.pdf", "ANEXO 2", 2, 3, "", "OTHER", True),
-        ("mezcla.pdf", "5270", 3, 4, "5270", "JG", True),
-        ("mezcla.pdf", "CJ5678", 4, 5, "", "CJ", True),
-        ("mezcla.pdf", "0005283", 5, 6, "5283", "JG", True),
+        ("DOC mezcla.pdf", "DC1234", 0, 2, "", "DC", True),
+        ("DOC mezcla.pdf", "ANEXO 2", 2, 3, "", "OTHER", True),
+        ("DOC mezcla.pdf", "5270", 3, 4, "5270", "JG", True),
+        ("DOC mezcla.pdf", "CJ5678", 4, 5, "", "CJ", True),
+        ("DOC mezcla.pdf", "0005283", 5, 6, "5283", "JG", True),
     ]
 
 
@@ -98,7 +98,7 @@ def test_pdf_ilegible(tmp_path):
     escaneo = escanear_origen([roto])
     assert escaneo.secciones == []
     assert len(escaneo.errores) == 1
-    assert escaneo.errores[0].startswith("No se pudo leer el PDF de origen 'roto.pdf'")
+    assert escaneo.errores[0].startswith("No se pudo leer el PDF 'roto.pdf'")
     assert validar_carga(escaneo) == escaneo.errores[0]
 
 
@@ -143,7 +143,7 @@ def test_los_pdfs_origen_se_escanean_una_sola_vez(app_sin_ui, monkeypatch, tmp_p
 
     monkeypatch.setattr(app_mod, "escanear_origen", contar)
 
-    assert cargar_origen(app_sin_ui, FIXTURES / "origen_contenedor_ok.pdf") == ""
+    assert cargar_origen(app_sin_ui, FIXTURES / "DOC contenedor ok.pdf") == ""
     analizar(app_sin_ui, EJ / "JP536.pdf", EJ / "DATOS JG.xlsx")
     app_sin_ui._refresh_meta_fields()
     app_sin_ui.no_jp_mode_var.set(True)
@@ -154,9 +154,9 @@ def test_los_pdfs_origen_se_escanean_una_sola_vez(app_sin_ui, monkeypatch, tmp_p
 
 
 def test_carga_fallida_no_cambia_lo_ya_cargado(app_sin_ui):
-    assert cargar_origen(app_sin_ui, FIXTURES / "origen_contenedor_ok.pdf") == ""
+    assert cargar_origen(app_sin_ui, FIXTURES / "DOC contenedor ok.pdf") == ""
     antes = (list(app_sin_ui.origin_pdf_paths), app_sin_ui.origin_scan)
 
-    assert cargar_origen(app_sin_ui, FIXTURES / "origen_conflicto_jg_duplicado.pdf") == secciones.ERROR_CONFLICTO
+    assert cargar_origen(app_sin_ui, FIXTURES / "DOC conflicto jg duplicado.pdf") == secciones.ERROR_CONFLICTO
     assert (app_sin_ui.origin_pdf_paths, app_sin_ui.origin_scan) == antes
     assert app_sin_ui.field_vars["dc"].get() == "1234"

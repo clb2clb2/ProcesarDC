@@ -11,7 +11,7 @@ a = Analysis(
     pathex=[],
     binaries=tkdnd_bins,
     # El icono va tambien como dato para ponerlo en la ventana (barra de titulo y de tareas).
-    datas=tkdnd_datas + [('assets/procesardc.ico', 'assets')],
+    datas=tkdnd_datas + [('assets/procesardc.ico', 'assets'), ('assets/ayuda/*.png', 'assets/ayuda')],
     hiddenimports=['tkinterdnd2'],
     hookspath=[],
     hooksconfig={},

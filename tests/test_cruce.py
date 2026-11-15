@@ -81,7 +81,7 @@ def test_jp536_cuadra_entero_con_datos_jg(app_sin_ui):
 
 
 def _validar_modo_normal(inst) -> str:
-    cargar_origen(inst, FIXTURES / "origen_contenedor_ok.pdf")
+    cargar_origen(inst, FIXTURES / "DOC contenedor ok.pdf")
     return inst._validate_before_processing()
 
 

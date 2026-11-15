@@ -18,7 +18,8 @@ from .zona_soltar import DESHABILITADA, ENCIMA, NORMAL, EstiloZona
 # Fuentes que define sv-ttk al cargarse.
 FUENTE = "SunValleyBodyFont"
 FUENTE_PISTA = "SunValleyCaptionFont"
-FUENTE_TITULO = "SunValleyBodyStrongFont"
+FUENTE_NEGRITA = "SunValleyBodyStrongFont"
+FUENTE_TITULO = "SunValleySubtitleFont"
 
 # Estilos.
 ESTILO_BOTON_PRINCIPAL = "Accent.TButton"  # propio de sv-ttk
