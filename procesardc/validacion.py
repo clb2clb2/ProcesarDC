@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 
-from .modelos import ExcelRowData, ResultadoCruce
+from .modelos import ExcelRowData, OriginSection, ResultadoCruce
 from .secciones import EscaneoOrigen, validar_dc_cj_unicos
+from .sugerencias_jg import sugerencias, textos
 
 ERROR_DC_NO_CARGADO = "No se ha cargado un Documento Contable válido"
 ERROR_CJ_NO_CARGADA = "No se ha cargado un Cuenta Justificativa válida"
@@ -16,6 +17,10 @@ ERROR_SIN_ANALISIS = "Debe ejecutar el análisis antes de procesar"
 ERROR_JP_SIN_JG = "Hay Justificantes de Pago a los que no se ha asignado un número de JG"
 ERROR_JG_REPETIDO = "Hay varias páginas de JP asignadas al mismo JG"
 ERROR_JG_INEXISTENTE = "Hay Justificantes de Pago con JG asignado que no existe en el archivo JG"
+ERROR_ARCHIVOS_NO_CORRESPONDEN = (
+    "¡Atención! Parece que el PDF de justificantes de gasto no se corresponde con el Excel de datos de JG."
+)
+AVISO_REVISAR_MARCADORES = "Revise los marcadores del PDF de justificantes de gasto y vuelva a cargar el archivo."
 
 
 def anio_detectado(filas: list[ExcelRowData]) -> str:
@@ -26,6 +31,28 @@ def anio_detectado(filas: list[ExcelRowData]) -> str:
         if match:
             anios.add(match.group(1))
     return "/".join(sorted(anios))
+
+
+def comparar_jg_pdf_excel(secciones: list[OriginSection], ids_excel: set[str]) -> tuple[str, bool]:
+    """Compara los JG marcados en el PDF (las secciones de la documentacion) con los del Excel,
+    que es el fiable.
+
+    Devuelve (mensaje, archivos_ajenos): ("", False) si coinciden o falta alguno de los dos;
+    si coinciden menos de la mitad, los archivos no son del mismo DC (archivos_ajenos=True);
+    si no, son erratas de los marcadores y el mensaje dice como corregirlas.
+    """
+    ids_pdf = {s.numeric_id for s in secciones if s.is_numeric and s.numeric_id}
+    if not ids_pdf or not ids_excel or ids_pdf == ids_excel:
+        return "", False
+
+    comunes = ids_pdf & ids_excel
+    if 2 * len(comunes) < max(len(ids_pdf), len(ids_excel)):
+        return ERROR_ARCHIVOS_NO_CORRESPONDEN, True
+
+    lineas = ["Los justificantes de gasto marcados en el PDF no coinciden con el Excel de datos de JG:", ""]
+    lineas += [f"• {linea}" for linea in textos(sugerencias(secciones, ids_excel))]
+    lineas += ["", AVISO_REVISAR_MARCADORES]
+    return "\n".join(lineas), False
 
 
 def es_anio_valido(anio: str) -> bool:

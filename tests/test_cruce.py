@@ -81,7 +81,11 @@ def test_jp536_cuadra_entero_con_datos_jg(app_sin_ui):
 
 
 def _validar_modo_normal(inst) -> str:
-    cargar_origen(inst, FIXTURES / "DOC contenedor ok.pdf")
+    # El contenedor pequeño (JG 5270 y 5283) no cuadra con el Excel y su carga se rechazaria:
+    # se carga como si el Excel no estuviera, para probar las reglas de procesar.
+    excel_data, inst.excel_data = inst.excel_data, []
+    assert cargar_origen(inst, FIXTURES / "DOC contenedor ok.pdf") == ""
+    inst.excel_data = excel_data
     return inst._validate_before_processing()
 
 

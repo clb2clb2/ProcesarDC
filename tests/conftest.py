@@ -49,6 +49,7 @@ def crear_app_sin_ui() -> app_mod.App:
     inst.excel_path = None
     inst.jp_pdf_data = []
     inst.excel_data = []
+    inst.excel_jg_descartados = []
     inst.main_results = []
     inst.excel_unassigned_results = []
     inst.main_row_by_iid = {}

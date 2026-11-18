@@ -15,6 +15,8 @@ from types import SimpleNamespace
 import pytest
 
 from procesardc import ventana as app_mod
+from procesardc.sugerencias_jg import Tipo
+from procesardc.validacion import ERROR_ARCHIVOS_NO_CORRESPONDEN
 from conftest import EJ, FIXTURES
 
 
@@ -52,7 +54,11 @@ def _estado_botones(w):
     return {nombre: str(getattr(w, nombre)["state"]) for nombre in ("btn_analyze", "btn_process", "btn_reset")}
 
 
-def _analizar(w, excel="DATOS JG.xlsx", origen="DOC contenedor ok.pdf"):
+# Documentacion con los mismos JG que DATOS JG.xlsx y DATOS JG2.xlsx.
+ORIGEN_DATOS_JG = "DOC contenedor DATOS JG.pdf"
+
+
+def _analizar(w, excel="DATOS JG.xlsx", origen=ORIGEN_DATOS_JG):
     assert w._aplicar_origen([(FIXTURES / origen).resolve()]) == ""
     w._set_jp_pdf(EJ / "JP536.pdf")
     w._set_excel(EJ / excel)
@@ -485,7 +491,7 @@ def test_pulsar_una_zona_abre_el_selector(ventana, monkeypatch):
 
 
 def test_zonas_bloqueadas_mientras_analiza(ventana):
-    assert ventana._aplicar_origen([(FIXTURES / "DOC contenedor ok.pdf").resolve()]) == ""
+    assert ventana._aplicar_origen([(FIXTURES / ORIGEN_DATOS_JG).resolve()]) == ""
     ventana._set_jp_pdf(EJ / "JP536.pdf")
     ventana._set_excel(EJ / "DATOS JG.xlsx")
     ventana.analyze()
@@ -841,7 +847,7 @@ def test_dialogo_jg_botones_y_validacion(ventana):
 
 
 def test_jg_manual_debe_existir_en_el_dc(ventana):
-    _analizar(ventana)  # Excel DATOS JG.xlsx y documentacion con los JG 5270 y 5283
+    _analizar(ventana)  # Excel DATOS JG.xlsx y documentacion con los mismos JG
     error = app_mod.ERROR_JG_NO_EXISTE
     assert error == "Ese número de JG no existe en este Documento Contable"
     assert ventana._error_jg_manual("5270") == ""
@@ -849,9 +855,148 @@ def test_jg_manual_debe_existir_en_el_dc(ventana):
     assert ventana._error_jg_manual("05270-26") == ""
     assert ventana._error_jg_manual("99999") == error  # no esta en el Excel
     assert ventana._error_jg_manual("abc") == error
-    # Esta en el Excel pero no entre los JG de la documentacion cargada.
-    otro = next(
-        n for n in (app_mod.id_numerico_jg(app_mod.normalizar_jg_manual(f.jg)) for f in ventana.excel_data)
-        if n not in ventana.origin_scan.ids_jg
-    )
-    assert ventana._error_jg_manual(otro) == error
+
+
+# --- Los JG marcados en la documentacion deben ser los del Excel -------------
+
+
+def test_excel_de_otro_dc_no_se_carga(ventana, monkeypatch, tmp_path):
+    dialogos = Dialogos(monkeypatch, tmp_path)
+    assert ventana._aplicar_origen([(FIXTURES / "DOC contenedor ok.pdf").resolve()]) == ""  # JG 5270 y 5283
+    ventana._set_excel(EJ / "DATOS JG.xlsx")  # 26 JG
+    assert dialogos.mensajes == [("showerror", "Error", ERROR_ARCHIVOS_NO_CORRESPONDEN)]
+    assert ventana.excel_path is None and ventana.excel_data == []
+    assert ventana.origin_scan.ids_jg == {"5270", "5283"}  # la documentacion sigue cargada
+
+
+def test_documentacion_de_otro_dc_no_se_carga(ventana, monkeypatch, tmp_path):
+    dialogos = Dialogos(monkeypatch, tmp_path)
+    ventana._set_excel(EJ / "DATOS JG.xlsx")
+    ventana._set_origin_pdfs([FIXTURES / "DOC contenedor ok.pdf"])
+    assert dialogos.mensajes == [("showerror", "Error", ERROR_ARCHIVOS_NO_CORRESPONDEN)]
+    assert ventana.origin_scan.secciones == [] and ventana.origin_pdf_paths == []
+
+
+def _excel_sin_un_jg(ventana, quitar: str):
+    """Deja cargado el Excel DATOS JG.xlsx como si no tuviera la fila del JG `quitar`."""
+    ventana.excel_path = EJ / "DATOS JG.xlsx"
+    ventana.excel_data = [
+        f for f in app_mod.leer_excel_detallado(ventana.excel_path)[0]
+        if app_mod.ids_jg_excel([f]) != {quitar}
+    ]
+
+
+def _capturar_ventana_marcadores(monkeypatch) -> list:
+    """Sustituye la ventana de correccion de marcadores y guarda las sugerencias que recibe."""
+    mostradas: list = []
+    monkeypatch.setattr(app_mod.dialogo_marcadores, "mostrar", lambda _p, lista, **_k: mostradas.append(lista))
+    return mostradas
+
+
+def test_marcador_que_no_esta_en_el_excel_rechaza_la_documentacion(ventana, monkeypatch, tmp_path):
+    dialogos = Dialogos(monkeypatch, tmp_path)
+    mostradas = _capturar_ventana_marcadores(monkeypatch)
+    _excel_sin_un_jg(ventana, "6743")
+    ventana._set_origin_pdfs([FIXTURES / ORIGEN_DATOS_JG])
+    assert dialogos.mensajes == []  # se explica en su ventana, no con un mensaje de texto
+    ((sugerencia,),) = mostradas
+    assert sugerencia.tipo is Tipo.SOBRA and sugerencia.marcador == "6743"
+    assert sugerencia.archivo.name == ORIGEN_DATOS_JG
+    assert ventana.origin_scan.secciones == []
+
+
+def test_otro_error_de_carga_no_reutiliza_sugerencias_anteriores(ventana, monkeypatch, tmp_path):
+    dialogos = Dialogos(monkeypatch, tmp_path)
+    mostradas = _capturar_ventana_marcadores(monkeypatch)
+    _excel_sin_un_jg(ventana, "6743")
+    ventana._set_origin_pdfs([FIXTURES / ORIGEN_DATOS_JG])
+    ventana._set_origin_pdfs([FIXTURES / "DOC conflicto jg duplicado.pdf"])
+    assert len(mostradas) == 1
+    assert [t for t, *_ in dialogos.mensajes] == ["showerror"]
+
+
+def test_excel_con_erratas_en_la_documentacion_la_descarga(ventana, monkeypatch, tmp_path):
+    dialogos = Dialogos(monkeypatch, tmp_path)
+    mostradas = _capturar_ventana_marcadores(monkeypatch)
+    _excel_sin_un_jg(ventana, "6743")
+    excel_incompleto = ventana.excel_data
+    ventana.excel_data = []
+    # Documentacion cargada con un JG de mas respecto al Excel que se carga despues.
+    assert ventana._aplicar_origen([(FIXTURES / ORIGEN_DATOS_JG).resolve()]) == ""
+    monkeypatch.setattr(app_mod, "leer_excel_detallado", lambda _p: (excel_incompleto, []))
+    ventana._set_excel(EJ / "DATOS JG.xlsx")
+    assert dialogos.mensajes == []
+    ((sugerencia,),) = mostradas
+    assert sugerencia.tipo is Tipo.SOBRA and sugerencia.marcador == "6743"
+    assert ventana.excel_data == excel_incompleto  # el Excel, que es el fiable, se carga
+    assert ventana.origin_scan.secciones == []  # y la documentacion se descarga
+    assert ventana.lbl_drop_origin.texto == app_mod.TEXTO_ZONA_ORIGEN
+
+
+# --- Ventana de correccion de marcadores ---------------------------------------
+
+
+def _dialogo_marcadores(ventana, sugerencias, paginas: list):
+    from procesardc import dialogo_marcadores
+
+    def dibujar(master, ruta, pagina, ancho, alto):
+        paginas.append((ruta.name, pagina))
+        return tk.PhotoImage(master=master, width=40, height=60)
+
+    d = dialogo_marcadores.DialogoMarcadores(ventana, sugerencias, dibujar=dibujar)
+    d.update()
+    return d
+
+
+def test_ventana_marcadores_muestra_la_pagina_y_los_numeros(ventana):
+    from procesardc.sugerencias_jg import Sugerencia
+
+    archivo = Path("JG 21436-25154 (17).pdf")
+    lista = [
+        Sugerencia(Tipo.CAMBIAR, archivo, 1, "21437", "21436"),
+        Sugerencia(Tipo.FALTA, numero="300", anterior="200", anterior_pagina=14, anterior_archivo=archivo),
+        Sugerencia(Tipo.FALTA, numero="400"),
+    ]
+    paginas: list = []
+    d = _dialogo_marcadores(ventana, lista, paginas)
+    try:
+        assert d.contador.cget("text") == "Corrección 1 de 3"
+        assert paginas == [(archivo.name, 1)]
+        assert d.numero_actual.cget("text") == "21437" and d.numero_actual.winfo_ismapped()
+        assert d.numero_correcto.cget("text") == "21436"
+        assert d.vista.winfo_ismapped()
+        assert d.boton_anterior.instate(["disabled"])
+
+        d.boton_siguiente.invoke()
+        d.update()
+        assert d.contador.cget("text") == "Corrección 2 de 3"
+        assert paginas[-1] == (archivo.name, 14)  # donde empieza el JG anterior
+        assert not d.numero_actual.winfo_ismapped()
+        assert d.numero_correcto.cget("text") == "300"
+        assert "después del JG 200" in d.texto.cget("text")
+
+        d.boton_siguiente.invoke()
+        d.update()
+        assert d.boton_siguiente.instate(["disabled"])
+        assert not d.vista.winfo_ismapped() and d.sin_vista.winfo_ismapped()  # no se sabe la pagina
+
+        d.boton_anterior.invoke()
+        d.boton_anterior.invoke()
+        assert d.indice == 0
+        assert len(paginas) == 2  # las paginas ya dibujadas se reutilizan
+    finally:
+        d.destroy()
+
+
+def test_ventana_marcadores_con_una_sola_correccion(ventana):
+    from procesardc.sugerencias_jg import Sugerencia
+
+    d = _dialogo_marcadores(ventana, [Sugerencia(Tipo.SOBRA, Path("JG.pdf"), 3, "150")], [])
+    try:
+        assert d.contador.cget("text") == "Hay que hacer esta corrección:"
+        assert not d.boton_siguiente.winfo_ismapped() and not d.boton_anterior.winfo_ismapped()
+        assert "no corresponde a ningún JG del Excel" in d.texto.cget("text")
+        d.event_generate("<Escape>")
+    finally:
+        if d.winfo_exists():
+            d.destroy()

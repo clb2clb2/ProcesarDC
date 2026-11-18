@@ -31,6 +31,13 @@ COLUMNAS_OBLIGATORIAS = {
 
 def leer_excel(excel_path: Path) -> tuple[list[ExcelRowData], list[int]]:
     """Devuelve las filas validas y los numeros de fila con JG que se han descartado."""
+    rows, descartadas = leer_excel_detallado(excel_path)
+    return rows, [fila for fila, _jg in descartadas]
+
+
+def leer_excel_detallado(excel_path: Path) -> tuple[list[ExcelRowData], list[tuple[int, str]]]:
+    """Como leer_excel, pero de cada fila descartada da tambien su JG (fila, "2026/0005270"):
+    esos JG son del Documento Contable aunque les falten datos."""
     wb = load_workbook(filename=str(excel_path), data_only=True)
     ws = wb.active
 
@@ -38,7 +45,7 @@ def leer_excel(excel_path: Path) -> tuple[list[ExcelRowData], list[int]]:
     col_index = mapear_columnas(ws, header_row_idx)
 
     rows: list[ExcelRowData] = []
-    discarded_rows: list[int] = []
+    discarded_rows: list[tuple[int, str]] = []
     for row_idx in range(header_row_idx + 1, ws.max_row + 1):
         valor = {key: ws.cell(row=row_idx, column=col).value for key, col in col_index.items()}
 
@@ -52,7 +59,7 @@ def leer_excel(excel_path: Path) -> tuple[list[ExcelRowData], list[int]]:
 
         if not es_fila_valida(jg_raw, fecha, total, ret, beneficiario, concepto):
             if JG_LIKE_RE.match(str(jg_raw or "")):
-                discarded_rows.append(row_idx)
+                discarded_rows.append((row_idx, str(jg_raw).strip()))
             continue
 
         rows.append(

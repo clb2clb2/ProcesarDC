@@ -19,18 +19,19 @@ from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pypdf import PdfReader
 
-from . import ayuda, cruce, dialogo_jg, salida, tema, vista_pdf
-from .lectura_excel import leer_excel
+from . import ayuda, cruce, dialogo_jg, dialogo_marcadores, salida, tema, vista_pdf
+from .lectura_excel import leer_excel_detallado
 from .modelos import Estado, ExcelRowData, PdfPageData, Resaltado, ResultadoCruce
 from .normalizacion import formatear_decimal, id_numerico_jg, normalizar_jg_manual
 from .ordenacion import FECHA, IMPORTE, NUMERO, TEXTO
 from .secciones import EscaneoOrigen, escanear_origen, validar_carga
+from .sugerencias_jg import sugerencias
 from .pestanas import BarraPestanas, ocultar_pestanas
 from .tabla import ColumnasAjustables, OrdenTabla
 from .tooltip import Tooltip
 from . import zona_soltar
 from .zona_soltar import Lineas, Segmento, ZonaSoltar
-from .validacion import anio_detectado, es_anio_valido, validar_para_procesar
+from .validacion import anio_detectado, comparar_jg_pdf_excel, es_anio_valido, validar_para_procesar
 
 try:
     from tkinterdnd2 import DND_FILES, REFUSE_DROP, TkinterDnD
@@ -122,6 +123,12 @@ def resumen_origen(escaneo: EscaneoOrigen) -> Lineas:
     ]
 
 
+def ids_jg_excel(filas: list[ExcelRowData], jg_descartados: list[str] = ()) -> set[str]:
+    """Numeros de JG del Excel ("2026/000005270" -> "5270"), incluidos los de filas descartadas."""
+    textos = [fila.jg for fila in filas] + list(jg_descartados)
+    return {i for i in (id_numerico_jg(normalizar_jg_manual(t)) for t in textos) if i}
+
+
 def _app_base_dir() -> Path:
     # En el .exe de PyInstaller (onefile) __file__ apunta al directorio temporal de extraccion.
     if getattr(sys, "frozen", False):
@@ -160,6 +167,7 @@ class App(BaseTk):
 
         self.jp_pdf_data: list[PdfPageData] = []
         self.excel_data: list[ExcelRowData] = []
+        self.excel_jg_descartados: list[str] = []  # JG de filas sin datos completos (son del DC)
 
         self.main_results: list[ResultadoCruce] = []
         self.excel_unassigned_results: list[dict] = []
@@ -549,7 +557,10 @@ class App(BaseTk):
 
         error_message = self._aplicar_origen(unique_sorted)
         if error_message:
-            messagebox.showerror("Error", error_message)
+            if self.sugerencias_marcadores:
+                self._mostrar_sugerencias_marcadores(self.sugerencias_marcadores)
+            else:
+                messagebox.showerror("Error", error_message)
             return
 
         self.lbl_drop_origin.set_texto(resumen_origen(self.origin_scan), pista="")
@@ -594,17 +605,36 @@ class App(BaseTk):
 
     def _set_excel(self, path: Path) -> None:
         try:
-            excel_rows, discarded_rows = leer_excel(path)
+            excel_rows, descartadas = leer_excel_detallado(path)
         except Exception as exc:
             messagebox.showerror("Error", f"No se pudo leer el Excel: {exc}")
+            return
+        discarded_rows = [fila for fila, _jg in descartadas]
+        jg_descartados = [jg for _fila, jg in descartadas]
+
+        # El Excel es el fiable: si el PDF de JG ya cargado no cuadra con el, o se ha elegido un
+        # Excel de otro DC (y no se carga) o los marcadores del PDF tienen erratas (y se descarga
+        # la documentacion del DC para que se corrija y se vuelva a cargar).
+        ids_excel = ids_jg_excel(excel_rows, jg_descartados)
+        diferencias, ajenos = comparar_jg_pdf_excel(self.origin_scan.secciones, ids_excel)
+        correcciones = sugerencias(self.origin_scan.secciones, ids_excel) if diferencias else []
+        if ajenos:
+            messagebox.showerror("Error", diferencias)
             return
 
         self.excel_path = path
         self.excel_data = excel_rows
+        self.excel_jg_descartados = jg_descartados
+        if diferencias:
+            self._descargar_origen()
         self.lbl_drop_excel.set_texto(f"JG en la tabla Excel: {len(self.excel_data)}", pista="")
         self._refresh_meta_fields()
         self.status_var.set("Excel de justificantes de gastos cargado correctamente.")
         self._update_action_buttons()
+
+        if diferencias:
+            self._mostrar_sugerencias_marcadores(correcciones)
+            return
 
         if discarded_rows:
             shown = ", ".join(str(n) for n in discarded_rows[:15])
@@ -622,15 +652,37 @@ class App(BaseTk):
 
     def _aplicar_origen(self, files: list[Path]) -> str:
         """Escanea y valida los PDFs origen; si son correctos, los deja cargados."""
+        self.sugerencias_marcadores = []  # correcciones de marcadores si el PDF no cuadra con el Excel
         escaneo = escanear_origen(files)
         error_message = validar_carga(escaneo)
         if error_message:
             return error_message
 
+        # Los JG marcados deben ser los del Excel (si ya esta cargado). Si son erratas, quedan en
+        # sugerencias_marcadores para explicarlas en su ventana.
+        ids_excel = ids_jg_excel(self.excel_data, self.excel_jg_descartados)
+        diferencias, ajenos = comparar_jg_pdf_excel(escaneo.secciones, ids_excel)
+        if diferencias:
+            if not ajenos:
+                self.sugerencias_marcadores = sugerencias(escaneo.secciones, ids_excel)
+            return diferencias
+
         self.origin_pdf_paths = list(files)
         self.origin_scan = escaneo
         self._refresh_meta_fields()
         return ""
+
+    def _mostrar_sugerencias_marcadores(self, correcciones) -> None:
+        """Ventana que explica como corregir los marcadores (en vez de un mensaje de texto)."""
+        dialogo_marcadores.mostrar(self, correcciones, fuente=tema.FUENTE, fuente_negrita=tema.FUENTE_NEGRITA)
+
+    def _descargar_origen(self) -> None:
+        """Deja la zona de documentacion del DC vacia, como al empezar."""
+        self.origin_pdf_paths = []
+        self.origin_scan = EscaneoOrigen()
+        self.lbl_drop_origin.set_texto(TEXTO_ZONA_ORIGEN, PISTA_CARGAR)
+        self._refresh_meta_fields()
+        self._update_action_buttons()
 
     def _refresh_meta_fields(self) -> None:
         escaneo = self.origin_scan
@@ -978,7 +1030,7 @@ class App(BaseTk):
         """Mensaje si el JG escrito no esta en el Excel o, si ya se han cargado, entre los JG
         de la documentacion del DC; "" si existe."""
         numero = id_numerico_jg(normalizar_jg_manual(texto))
-        en_excel = {id_numerico_jg(normalizar_jg_manual(fila.jg)) for fila in self.excel_data}
+        en_excel = ids_jg_excel(self.excel_data)
         en_documentacion = self.origin_scan.ids_jg
         if not numero or numero not in en_excel or (en_documentacion and numero not in en_documentacion):
             return ERROR_JG_NO_EXISTE
@@ -1061,6 +1113,7 @@ class App(BaseTk):
 
         self.jp_pdf_data = []
         self.excel_data = []
+        self.excel_jg_descartados = []
         self.main_results = []
         self.excel_unassigned_results = []
 
