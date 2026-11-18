@@ -14,17 +14,20 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from pypdf import PdfReader
 
-from . import ayuda, cruce, salida, tema
+from . import ayuda, cruce, dialogo_jg, salida, tema, vista_pdf
 from .lectura_excel import leer_excel
 from .modelos import Estado, ExcelRowData, PdfPageData, Resaltado, ResultadoCruce
-from .normalizacion import formatear_decimal, normalizar_jg_manual
+from .normalizacion import formatear_decimal, id_numerico_jg, normalizar_jg_manual
 from .ordenacion import FECHA, IMPORTE, NUMERO, TEXTO
 from .secciones import EscaneoOrigen, escanear_origen, validar_carga
+from .pestanas import BarraPestanas, ocultar_pestanas
 from .tabla import ColumnasAjustables, OrdenTabla
+from .tooltip import Tooltip
 from . import zona_soltar
 from .zona_soltar import Lineas, Segmento, ZonaSoltar
 from .validacion import anio_detectado, es_anio_valido, validar_para_procesar
@@ -45,7 +48,7 @@ INTERVALO_TAREAS_MS = 50
 # Textos de las zonas de carga.
 TEXTO_ZONA_ORIGEN = "Arrastra aquí la documentación del DC"
 TEXTO_ZONA_JP = "Arrastra el PDF de justificantes de pago"
-TEXTO_ZONA_EXCEL = "Arrastra el Excel de datos de justif. de gasto"
+TEXTO_ZONA_EXCEL = "Arrastra el Excel de datos de justificantes de gasto"
 PISTA_CARGAR = "(o pulsa para cargar)"
 # Alto minimo de las zonas de carga (crecen si su texto no cabe).
 ALTO_ZONA_ORIGEN = 150
@@ -53,6 +56,38 @@ ALTO_ZONA = 68
 
 # Ancho minimo de las columnas de texto largo, que se estrechan para que la tabla quepa sin barra horizontal.
 ANCHO_MINIMO_AJUSTABLE = 120
+
+# Columna "JG candidatos": los candidatos se separan asi y se asignan con un clic.
+SEPARADOR_CANDIDATOS = ", "
+MARGEN_TEXTO_CELDA = 4  # pixeles entre el borde de la celda y su texto (aprox.)
+TOOLTIP_CANDIDATO = "Pulsa para asignar"
+
+# Asignacion manual de JG (doble clic en una fila).
+MENSAJE_ASIGNACION = "Indique el número de JG al que quiere asignar este Justificante de Pago (página {pagina})."
+ANCHO_VISTA_JP = 800  # pixeles de la vista previa de la pagina del justificante
+ERROR_JG_NO_EXISTE = "Ese número de JG no existe en este Documento Contable"
+
+
+def candidato_pulsado(candidatos: list[str], x: float, medir) -> str | None:
+    """Candidato bajo la posicion `x` (desde el inicio del texto de la celda), o None.
+
+    Con un solo candidato vale cualquier punto de la celda; con varios, el mas cercano,
+    siempre que el clic caiga sobre el texto o a menos de un separador de el.
+    """
+    if not candidatos:
+        return None
+    if len(candidatos) == 1:
+        return candidatos[0]
+    separador = medir(SEPARADOR_CANDIDATOS)
+    inicio = 0.0
+    tramos = []
+    for candidato in candidatos:
+        fin = inicio + medir(candidato)
+        tramos.append((candidato, inicio, fin))
+        inicio = fin + separador
+    if x > tramos[-1][2] + separador:
+        return None
+    return min(tramos, key=lambda t: 0 if t[1] <= x <= t[2] else min(abs(x - t[1]), abs(x - t[2])))[0]
 
 
 MARCA_SI = "✔"
@@ -213,15 +248,21 @@ class App(BaseTk):
         self.btn_reset = ttk.Button(actions, text="Reiniciar", command=self.confirm_reset_state)
         self.btn_reset.grid(row=0, column=2, sticky="e")
 
-        self.tabs = ttk.Notebook(root)
-        self.tabs.pack(fill=tk.BOTH, expand=True)
+        # Pestanas propias encima del Notebook (cuyas pestanas se ocultan), para poder
+        # destacar el numero de filas del Excel sin asignar.
+        self.tabs = ttk.Notebook(root, style=ocultar_pestanas(ttk.Style(self)))
+        self.barra_pestanas = BarraPestanas(
+            root, self.tabs, self.paleta.pestanas, fuente=tema.FUENTE, fuente_contador=tema.FUENTE_NEGRITA
+        )
+        self.barra_pestanas.pack(fill=tk.X)
+        self.tabs.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
 
         tab_main = ttk.Frame(self.tabs)
         tab_unassigned_excel = ttk.Frame(self.tabs)
         self.tab_unassigned_excel = tab_unassigned_excel
 
-        self.tabs.add(tab_main, text="Resultado del analisis")
-        self.tabs.add(tab_unassigned_excel, text="Filas Excel no asignadas")
+        self.barra_pestanas.agregar(tab_main, "Resultado del análisis")
+        self.barra_pestanas.agregar(tab_unassigned_excel, "Filas Excel no asignadas")
 
         columns = [
             ("page", "Pagina", 70),
@@ -231,12 +272,10 @@ class App(BaseTk):
             ("beneficiario", "Beneficiario", 280),
             ("concepto", "Concepto", 340),
             ("jg", "JG asignado", 120),
-            ("jg_apply", "", 34),
-            ("jg_candidates", "JG candidatos", 220),
+            ("jg_candidates", "JG candidatos", 120),  # mismo ancho que "JG asignado"
         ]
 
-        self.tree_main = self._build_table(tab_main, columns, ajustables={"beneficiario", "concepto", "jg_candidates"})
-        self.tree_main.column("jg_apply", anchor="center")
+        self.tree_main = self._build_table(tab_main, columns, ajustables={"beneficiario", "concepto"})
         self.tree_main.tag_configure("incidencia", foreground=self.paleta.error)
         self.tree_main.tag_configure("probable_ok", foreground=self.paleta.ok)
         self.tree_main.tag_configure(
@@ -245,6 +284,10 @@ class App(BaseTk):
         self.tree_main.bind("<Double-1>", self._on_main_double_click, add="+")
         self.tree_main.bind("<<TreeviewSelect>>", self._on_main_selection_changed)
         self.tree_main.bind("<ButtonRelease-1>", self._on_main_click_action, add="+")
+        self.tree_main.bind("<Motion>", self._cursor_sobre_candidatos, add="+")
+        self.tooltip_candidatos = Tooltip(self.tree_main, fuente=tema.FUENTE_PISTA)
+        self.tree_main.bind("<Leave>", lambda _e: self.tooltip_candidatos.ocultar(), add="+")
+        self.tree_main.bind("<ButtonPress-1>", lambda _e: self.tooltip_candidatos.ocultar(), add="+")
         self.orden_main = OrdenTabla(
             self.tree_main,
             {
@@ -294,9 +337,14 @@ class App(BaseTk):
             textvariable=self.detail_var,
             justify="left",
             anchor="w",
-            wraplength=1420,
+            wraplength=1100,
         )
-        self.lbl_mismatch_detail.pack(fill=tk.X)
+        detail_frame.columnconfigure(0, weight=1)
+        self.lbl_mismatch_detail.grid(row=0, column=0, sticky="nw")
+        # Botones "Asignar JG n" de la fila seleccionada (uno por candidato).
+        self.marco_candidatos = ttk.Frame(detail_frame)
+        self.marco_candidatos.grid(row=0, column=1, sticky="ne", padx=(12, 0))
+        self.botones_candidatos: list[ttk.Button] = []
 
         process_frame = ttk.Frame(tab_main, padding=(0, 8, 0, 0))
         process_frame.pack(fill=tk.X)
@@ -801,7 +849,6 @@ class App(BaseTk):
 
         for row in self.main_results:
             pagina = row.pagina
-            candidatos = " | ".join(row.candidatos)
             values = [
                 pagina.page_number,
                 pagina.fecha,
@@ -810,8 +857,7 @@ class App(BaseTk):
                 pagina.beneficiario,
                 pagina.concepto,
                 row.jg_efectivo,
-                "<-" if candidatos else "",
-                candidatos,
+                SEPARADOR_CANDIDATOS.join(row.candidatos),
             ]
             if row.jg_efectivo and cruce.clave_duplicado(row) in duplicated_jg:
                 tags = ("jg_duplicado",)
@@ -844,13 +890,14 @@ class App(BaseTk):
             tree.insert("", tk.END, values=values)
 
     def _update_unassigned_tab_title(self) -> None:
-        count = len(self.excel_unassigned_results)
-        base_title = "Filas Excel no asignadas"
-        title = f"{base_title} ({count})" if count != 0 else base_title
-        self.tabs.tab(self.tab_unassigned_excel, text=title)
+        # El numero de filas sin asignar sale en rojo y negrita (oculto si es 0).
+        self.barra_pestanas.set_texto(
+            self.tab_unassigned_excel, "Filas Excel no asignadas", len(self.excel_unassigned_results)
+        )
 
     def _on_main_selection_changed(self, _event) -> None:
         selected = self.tree_main.selection()
+        self._mostrar_botones_candidatos(self.main_row_by_iid.get(selected[0]) if selected else None)
         if not selected:
             self.detail_var.set("Seleccione una fila en rojo para ver el detalle de diferencias (JP/JG).")
             return
@@ -875,9 +922,73 @@ class App(BaseTk):
         # Los clics en los encabezados son para ordenar, no para editar filas.
         return self.tree_main.identify_region(event.x, event.y) == "cell"
 
+    def _mostrar_botones_candidatos(self, row: ResultadoCruce | None) -> None:
+        for boton in self.botones_candidatos:
+            boton.destroy()
+        self.botones_candidatos = []
+        for candidato in (row.candidatos if row else []):
+            boton = ttk.Button(
+                self.marco_candidatos, text=f"Asignar JG {candidato}", style=tema.ESTILO_BOTON_PRINCIPAL,
+                command=lambda r=row, c=candidato: self._asignar_candidato(r, c),
+            )
+            boton.pack(side=tk.LEFT, padx=(6, 0))
+            self.botones_candidatos.append(boton)
+
+    def _asignar_candidato(self, row: ResultadoCruce, candidato: str) -> None:
+        row.jg_manual = candidato
+        self._rebuild_excel_unassigned_results()
+        self._refresh_tables()
+        # La fila sigue seleccionada tras redibujar la tabla.
+        iid = next((i for i, r in self.main_row_by_iid.items() if r is row), None)
+        if iid:
+            self.tree_main.selection_set(iid)
+            self.tree_main.see(iid)
+            self._on_main_selection_changed(None)
+        self._update_status_summary(prefix=f"JG candidato {candidato} copiado a JG asignado. ")
+
+    def _candidato_en(self, event) -> tuple[ResultadoCruce, str] | None:
+        """(fila, candidato) bajo el raton en la columna "JG candidatos", o None."""
+        columna = f"#{list(self.tree_main['columns']).index('jg_candidates') + 1}"
+        if not self._es_clic_en_celda(event) or self.tree_main.identify_column(event.x) != columna:
+            return None
+        row = self.main_row_by_iid.get(self.tree_main.identify_row(event.y))
+        if not row or not row.candidatos:
+            return None
+        caja = self.tree_main.bbox(self.tree_main.identify_row(event.y), "jg_candidates")
+        fuente = tkfont.nametofont(str(ttk.Style(self).lookup("Treeview", "font") or "TkDefaultFont"), root=self)
+        x = event.x - caja[0] - MARGEN_TEXTO_CELDA if caja else 0
+        candidato = candidato_pulsado(row.candidatos, x, fuente.measure)
+        return (row, candidato) if candidato else None
+
+    def _cursor_sobre_candidatos(self, event) -> None:
+        """Sobre un JG candidato: cursor de mano y tooltip "Pulsa para asignar"."""
+        if self.tree_main.identify_region(event.x, event.y) == "separator":
+            self.tooltip_candidatos.ocultar()
+            return  # ahi manda el cursor de redimensionar columnas
+        sobre_candidato = self._candidato_en(event) is not None
+        self.tree_main.configure(cursor="hand2" if sobre_candidato else "")
+        if sobre_candidato:
+            self.tooltip_candidatos.mostrar(
+                TOOLTIP_CANDIDATO, self.tree_main.winfo_rootx() + event.x, self.tree_main.winfo_rooty() + event.y
+            )
+        else:
+            self.tooltip_candidatos.ocultar()
+
+    def _error_jg_manual(self, texto: str) -> str:
+        """Mensaje si el JG escrito no esta en el Excel o, si ya se han cargado, entre los JG
+        de la documentacion del DC; "" si existe."""
+        numero = id_numerico_jg(normalizar_jg_manual(texto))
+        en_excel = {id_numerico_jg(normalizar_jg_manual(fila.jg)) for fila in self.excel_data}
+        en_documentacion = self.origin_scan.ids_jg
+        if not numero or numero not in en_excel or (en_documentacion and numero not in en_documentacion):
+            return ERROR_JG_NO_EXISTE
+        return ""
+
     def _on_main_double_click(self, event) -> None:
         if not self._es_clic_en_celda(event):
             return
+        if self._candidato_en(event):
+            return  # el clic en un candidato ya lo ha asignado
         row_id = self.tree_main.identify_row(event.y)
         if not row_id:
             return
@@ -886,17 +997,19 @@ class App(BaseTk):
         if not row:
             return
 
-        source_name = row.pagina.source_name
         page_number = row.pagina.page_number
-        user_value = simpledialog.askstring(
-            "Asignacion manual de JG",
-            (
-                f"Archivo {source_name}, pagina {page_number}.\n"
-                "Indique el JG manual (ej: 12345-26).\n"
-                "Puede dejarlo vacio para limpiar la asignacion."
-            ),
-            initialvalue=row.jg_manual,
-            parent=self,
+        # La pagina del justificante de pago, a la vista en el dialogo (si se puede dibujar).
+        imagen = (
+            vista_pdf.imagen_pagina(self, self.jp_pdf_path, page_number, ANCHO_VISTA_JP)
+            if self.jp_pdf_path else None
+        )
+        user_value = dialogo_jg.pedir_jg(
+            self,
+            MENSAJE_ASIGNACION.format(pagina=page_number),
+            valor_inicial=row.jg_manual,
+            imagen=imagen,
+            fuente=tema.FUENTE,
+            validar=self._error_jg_manual,
         )
 
         if user_value is None:
@@ -908,39 +1021,10 @@ class App(BaseTk):
         self._update_status_summary(prefix="Asignacion manual actualizada. ")
 
     def _on_main_click_action(self, event) -> None:
-        if not self._es_clic_en_celda(event):
-            return
-        row_id = self.tree_main.identify_row(event.y)
-        if not row_id:
-            return
-
-        col_ref = self.tree_main.identify_column(event.x)
-        if not col_ref.startswith("#"):
-            return
-
-        try:
-            col_idx = int(col_ref[1:]) - 1
-        except ValueError:
-            return
-
-        columns = list(self.tree_main["columns"])
-        if col_idx < 0 or col_idx >= len(columns):
-            return
-
-        if columns[col_idx] != "jg_apply":
-            return
-
-        row = self.main_row_by_iid.get(row_id)
-        if not row:
-            return
-
-        if not row.candidatos:
-            return
-
-        row.jg_manual = row.candidatos[0]
-        self._rebuild_excel_unassigned_results()
-        self._refresh_tables()
-        self._update_status_summary(prefix="JG candidato copiado a JG asignado. ")
+        """Un clic sobre un JG candidato lo asigna a la fila."""
+        pulsado = self._candidato_en(event)
+        if pulsado:
+            self._asignar_candidato(*pulsado)
 
     def _rebuild_excel_unassigned_results(self) -> None:
         self.excel_unassigned_results = cruce.filas_excel_no_asignadas(self.main_results, self.excel_data)
@@ -988,6 +1072,7 @@ class App(BaseTk):
         self.field_vars["dc"].set("")
         self.field_vars["cj"].set("")
         self.no_jp_mode_var.set(False)
+        self.doc_type_var.set("Remesa INV")  # tipo de DC por defecto
 
         for item in self.tree_main.get_children():
             self.tree_main.delete(item)

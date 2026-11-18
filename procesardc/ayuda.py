@@ -21,6 +21,7 @@ from tkinter import ttk
 PARRAFO = "p"
 PASO = "paso"  # parrafo con flecha delante
 CONTINUACION = "cont"  # parrafo sin flecha, alineado con el texto del paso anterior
+ESPACIO = "esp"  # linea en blanco extra
 VINETA = "li"
 IMAGEN = "img"  # el texto del bloque es el nombre de la imagen (sin escala ni extension)
 
@@ -43,8 +44,9 @@ class Ayuda:
 AYUDA_ORIGEN = Ayuda(
     "Documentación del DC",
     (
-        (PARRAFO, "Carga aquí el Documento Contable y toda su documentación. Puedes arrastrar varios PDF a la "
-                  "vez, que el sistema reconocerá según los siguientes códigos:"),
+        (PARRAFO, "**Carga aquí el Documento Contable y toda su documentación.**"),
+        (PARRAFO, "Puedes arrastrar varios PDF a la vez, que el sistema reconocerá según los siguientes códigos:"),
+        (ESPACIO, ""),
         (PASO, "Un PDF cuyo nombre empiece por **“DC”**, **“CJ”** o **“RT”** seguido del número (“DC7546.pdf”, "
                "“CJ705.pdf”, “RT1604.pdf”): el **Documento Contable**, la **Cuenta Justificativa** o la "
                "**Relación de Transferencias**."),
@@ -65,29 +67,31 @@ AYUDA_ORIGEN = Ayuda(
 )
 
 AYUDA_JP = Ayuda(
-    "PDF de justificantes de pago",
+    "Justificantes de pago",
     (
-        (PARRAFO, "Un único PDF con las órdenes de transferencia emitidas por el banco, "
-                  "una transferencia por página."),
-        (PARRAFO, "De cada página se leen la fecha de operación, el importe ordenado, el beneficiario "
-                  "y el concepto (con el número de factura) para cruzarlos con el Excel."),
-        (PARRAFO, "No hace falta si se marca «DC sin justificantes de pago»."),
+        (PARRAFO, "**Si el Documento Contable incluye una remesa de transferencias, carga aquí el PDF "
+                  "descargado del banco con los justificantes de pago asociados.**"),
+        (IMAGEN, "justificante_pago"),
     ),
 )
 
 AYUDA_EXCEL = Ayuda(
-    "Excel de justificantes de gasto",
+    "Datos de Justificantes de Gasto",
     (
-        (PARRAFO, "El Excel (.xlsx) exportado de UXXI con la selección paramétrica de justificantes "
-                  "del gasto. Debe tener estas columnas:"),
-        (VINETA, "Nº reg. justific. (con el formato AAAA/NNNN)"),
-        (VINETA, "Fecha pago"),
-        (VINETA, "Importe total e Importe retención"),
-        (VINETA, "Factura proveedor"),
-        (VINETA, "Nombre proveedor"),
-        (VINETA, "Descripción"),
-        (PARRAFO, "Las filas a las que les falte alguno de estos datos se descartan, y se avisa de ello."),
-        (PARRAFO, "No hace falta si se marca «DC sin justificantes de pago»."),
+        (PARRAFO, "**Carga aquí un Excel descargado de UXXI Económico con los datos de los Justificantes "
+                  "de Gasto asociados a este Documento Contable.**"),
+        (ESPACIO, ""),
+        (PARRAFO, "Entra en UXXI Económico y haz una búsqueda paramétrica que incluya los siguientes datos: "
+                  "**Nº Registro justificante**, **Fecha de pago**, **Importe Total**, **Importe retención**, "
+                  "**Nº factura proveedor**, **Nombre proveedor** y **Descripción**."),
+        (IMAGEN, "excel_datos_a_incluir"),
+        (PARRAFO, "E indica el número del documento contable en la pestaña Datos Asoc. 1/2:"),
+        (IMAGEN, "excel_documento_contable"),
+        (PARRAFO, "Exporta el resultado de la búsqueda como archivo “.xlsx”, y guárdalo para cargarlo en "
+                  "esta zona."),
+        (IMAGEN, "excel_exportar"),
+        (PARRAFO, "El sistema analizará los datos de cada uno de los JG para unirlos al Justificante de Pago "
+                  "correspondiente."),
     ),
 )
 
@@ -151,6 +155,9 @@ class VentanaAyuda(tk.Toplevel):
 
         self.texto.insert("end", ayuda.titulo + "\n", ("titulo",))
         for tipo, contenido in ayuda.bloques:
+            if tipo == ESPACIO:
+                self.texto.insert("end", "\n")
+                continue
             if tipo == IMAGEN:
                 if contenido in self.imagenes:  # si falta el PNG, la ayuda se muestra sin la imagen
                     inicio = self.texto.index("end-1c")
@@ -200,6 +207,9 @@ class VentanaAyuda(tk.Toplevel):
             self.barra.pack(side=tk.RIGHT, fill=tk.Y, padx=(6, 0))
         else:
             self.texto.configure(height=math.ceil(contenido / linea))
+        # Al reducir el alto, Tk puede conservar un desplazamiento: se abre siempre por el principio.
+        self.texto.mark_set("insert", "1.0")
+        self.texto.yview_moveto(0)
 
 
 def mostrar(

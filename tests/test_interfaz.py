@@ -112,7 +112,7 @@ def test_doble_clic_asigna_y_resalta_duplicado(ventana, monkeypatch):
     primera, segunda = ventana.tree_main.get_children()[:2]
     jg = ventana.main_row_by_iid[primera].jg_efectivo
 
-    monkeypatch.setattr(app_mod.simpledialog, "askstring", lambda *a, **k: f"2026/00000{jg}")
+    monkeypatch.setattr(app_mod.dialogo_jg, "pedir_jg", lambda *a, **k: f"2026/00000{jg}")
     ventana._on_main_double_click(_evento(ventana, segunda))
 
     filas = _filas(ventana)
@@ -121,21 +121,62 @@ def test_doble_clic_asigna_y_resalta_duplicado(ventana, monkeypatch):
     assert ventana.status_var.get().startswith("Asignacion manual actualizada.")
 
     # Vaciar el dialogo quita la asignacion manual.
-    monkeypatch.setattr(app_mod.simpledialog, "askstring", lambda *a, **k: "")
+    monkeypatch.setattr(app_mod.dialogo_jg, "pedir_jg", lambda *a, **k: "")
     ventana._on_main_double_click(_evento(ventana, ventana.tree_main.get_children()[1]))
     assert _filas(ventana)[1][1] != ("jg_duplicado",)
 
 
-def test_flecha_copia_el_primer_candidato(ventana):
+def test_clic_en_candidato_lo_asigna(ventana):
     _analizar(ventana, excel="DATOS JG2.xlsx")
     tree = ventana.tree_main
+    assert "jg_apply" not in tree["columns"]  # ya no hay columna de flecha
     iid = next(i for i in tree.get_children() if ventana.main_row_by_iid[i].candidatos)
     resultado = ventana.main_row_by_iid[iid]
+    candidato = resultado.candidatos[0]
 
-    ventana._on_main_click_action(_evento(ventana, iid, "jg_apply"))
+    # Sobre la celda del candidato, el cursor es una mano; fuera, no.
+    evento = _evento(ventana, iid, "jg_candidates")
+    ventana._cursor_sobre_candidatos(evento)
+    assert str(tree["cursor"]) == "hand2"
+    ventana._cursor_sobre_candidatos(_evento(ventana, iid, "fecha"))
+    assert str(tree["cursor"]) == ""
 
+    ventana._on_main_click_action(_evento(ventana, iid, "jg_candidates"))
+    assert resultado.jg_manual == candidato
+    assert ventana.status_var.get().startswith(f"JG candidato {candidato} copiado a JG asignado.")
+    # La fila sigue seleccionada tras redibujar la tabla.
+    assert ventana.main_row_by_iid[tree.selection()[0]] is resultado
+
+
+def test_botones_de_candidatos_en_el_detalle(ventana):
+    _analizar(ventana, excel="DATOS JG2.xlsx")
+    tree = ventana.tree_main
+    con = next(i for i in tree.get_children() if ventana.main_row_by_iid[i].candidatos)
+    sin = next(i for i in tree.get_children() if not ventana.main_row_by_iid[i].candidatos)
+    resultado = ventana.main_row_by_iid[con]
+
+    tree.selection_set(sin)
+    ventana._on_main_selection_changed(None)
+    assert ventana.botones_candidatos == []
+
+    tree.selection_set(con)
+    ventana._on_main_selection_changed(None)
+    textos = [str(b["text"]) for b in ventana.botones_candidatos]
+    assert textos == [f"Asignar JG {c}" for c in resultado.candidatos]
+
+    ventana.botones_candidatos[0].invoke()
     assert resultado.jg_manual == resultado.candidatos[0]
-    assert ventana.status_var.get().startswith("JG candidato copiado a JG asignado.")
+
+
+def test_candidato_pulsado():
+    medir = len  # 1 pixel por caracter; el separador ", " mide 2
+    assert app_mod.candidato_pulsado([], 3, medir) is None
+    assert app_mod.candidato_pulsado(["5768"], 99, medir) == "5768"  # uno solo: cualquier punto
+    # "5768, 5962": 5768 ocupa 0-4 y 5962 ocupa 6-10.
+    assert app_mod.candidato_pulsado(["5768", "5962"], 2, medir) == "5768"
+    assert app_mod.candidato_pulsado(["5768", "5962"], 8, medir) == "5962"
+    assert app_mod.candidato_pulsado(["5768", "5962"], 11, medir) == "5962"
+    assert app_mod.candidato_pulsado(["5768", "5962"], 40, medir) is None  # lejos del texto
 
 
 def _columna(tree, col):
@@ -154,7 +195,6 @@ def test_ordenar_por_encabezado_cicla_asc_desc_original(ventana):
     assert originales != sorted(originales)  # si ya viniera ordenado, el test no probaria nada
 
     assert tree.heading("importe", "command")  # el clic en el encabezado tiene accion
-    assert not tree.heading("jg_apply", "command")  # la columna de la flecha no se ordena
     ventana.orden_main.clic_encabezado("importe")
     importes = [_importe(v) for v in _columna(tree, "importe")]
     assert importes == sorted(importes)
@@ -185,7 +225,7 @@ def test_el_orden_se_mantiene_tras_asignar_y_se_quita_al_reiniciar(ventana, monk
 
     segunda = tree.get_children()[1]
     jg = ventana.main_row_by_iid[segunda].jg_efectivo
-    monkeypatch.setattr(app_mod.simpledialog, "askstring", lambda *a, **k: jg)
+    monkeypatch.setattr(app_mod.dialogo_jg, "pedir_jg", lambda *a, **k: jg)
     ventana._on_main_double_click(_evento(ventana, segunda))
 
     assert _columna(tree, "page") == orden
@@ -209,8 +249,8 @@ def test_clic_en_encabezado_no_edita_filas(ventana, monkeypatch):
     def no_debe_llamarse(*_a, **_k):
         raise AssertionError("No debe abrir el dialogo de asignacion")
 
-    monkeypatch.setattr(app_mod.simpledialog, "askstring", no_debe_llamarse)
-    x_jg, _y, ancho, _alto = tree.bbox(tree.get_children()[0], "jg_apply")
+    monkeypatch.setattr(app_mod.dialogo_jg, "pedir_jg", no_debe_llamarse)
+    x_jg, _y, ancho, _alto = tree.bbox(tree.get_children()[0], "jg_candidates")
     encabezado = SimpleNamespace(x=x_jg + ancho // 2, y=5)
     assert tree.identify_region(encabezado.x, encabezado.y) == "heading"
 
@@ -269,7 +309,7 @@ def test_zonas_de_carga_textos_y_estados(ventana):
     assert not hasattr(ventana, "btn_load_jp")  # los botones de carga ya no existen
     assert (zona.texto, zona.pista) == ("Arrastra el PDF de justificantes de pago", "(o pulsa para cargar)")
     assert ventana.lbl_drop_origin.texto == "Arrastra aquí la documentación del DC"
-    assert ventana.lbl_drop_excel.texto == "Arrastra el Excel de datos de justif. de gasto"
+    assert ventana.lbl_drop_excel.texto == "Arrastra el Excel de datos de justificantes de gasto"
     assert zona.itemcget("pista", "text") == "(o pulsa para cargar)"
     assert str(zona["cursor"]) == "hand2"
     # Icono pequeno a la izquierda, centrado en vertical, sin pisar el texto.
@@ -386,7 +426,13 @@ def test_icono_de_ayuda_en_las_tres_zonas(ventana, monkeypatch):
     # Solo una a la vez: abrir la del Excel ha cerrado las anteriores.
     assert sum(isinstance(w, ayuda.VentanaAyuda) for w in ventana.winfo_children()) == 1
 
-    # Escape la cierra.
+    # Escape la cierra (Tk descarta los eventos enviados a una ventana que aun no se ve).
+    limite = time.monotonic() + 5
+    while not abierta.winfo_viewable() and time.monotonic() < limite:
+        ventana.update()
+        time.sleep(0.02)
+    abierta.focus_force()
+    ventana.update()
     abierta.event_generate("<Escape>")
     ventana.update()
     assert not abierta.winfo_exists()
@@ -484,7 +530,7 @@ def test_redimensionar_columna_mantiene_la_tabla_dentro(ventana, columna, cambio
     anchos = {c: int(tree.column(c, "width")) for c in tree["columns"]}
     assert sum(anchos.values()) <= tree.winfo_width()
     assert anchos[columna] == pedido
-    assert min(anchos[c] for c in ("beneficiario", "concepto", "jg_candidates")) >= app_mod.ANCHO_MINIMO_AJUSTABLE
+    assert min(anchos[c] for c in ("beneficiario", "concepto")) >= app_mod.ANCHO_MINIMO_AJUSTABLE
 
     # Al cambiar el tamano de la ventana se mantienen las proporciones elegidas.
     if columna in columnas.pesos:
@@ -520,7 +566,9 @@ def test_tablas_sin_barra_horizontal(ventana, ancho):
 
 def test_reiniciar(ventana):
     _analizar(ventana)
+    ventana.cmb_doc_type.current(3)  # "Manual ORD"
     ventana.reset_state()
+    assert ventana.doc_type_var.get() == "Remesa INV" and ventana.cmb_doc_type.get() == "Remesa INV"
     assert _filas(ventana) == []
     assert ventana.main_results == [] and ventana.origin_scan.secciones == []
     assert ventana.field_vars["dc"].get() == ""
@@ -649,3 +697,161 @@ def test_ayuda_de_origen_con_ilustraciones(ventana, monkeypatch):
     ventana.update()
     assert not ventana._ventana_ayuda.texto.image_names()
     ventana._ventana_ayuda.destroy()
+
+
+@pytest.mark.parametrize("zona", ["lbl_drop_origin", "lbl_drop_jp", "lbl_drop_excel"])
+def test_las_ayudas_se_abren_por_el_principio(ventana, zona):
+    ventana.update()
+    z = getattr(ventana, zona)
+    z._pulsar(_centro_ayuda(z))
+    ventana.update()
+    abierta = ventana._ventana_ayuda
+    assert abierta.texto.yview()[0] == 0.0
+    assert abierta.winfo_height() <= __import__("procesardc.ayuda", fromlist=["x"]).ALTO_VENTANA
+    abierta.destroy()
+
+
+def test_pestana_con_filas_sin_asignar_destacadas(ventana):
+    import tkinter.font as tkfont
+
+    from procesardc import tema
+
+    barra = ventana.barra_pestanas
+    pagina = ventana.tab_unassigned_excel
+    p = barra.pestanas[str(pagina)]
+    assert not p["contador"].winfo_ismapped()  # sin datos: sin contador
+
+    _analizar(ventana)
+    assert barra.texto_completo(pagina) == "Filas Excel no asignadas (1)"
+    assert p["contador"].cget("text") == " (1)"
+    assert p["contador"].cget("fg") == tema.PALETA.pestanas.contador
+    negrita = tkfont.nametofont(p["contador"].cget("font"), root=ventana).actual("weight")
+    normal = tkfont.nametofont(p["etiqueta"].cget("font"), root=ventana).actual("weight")
+    assert negrita == "bold" and normal == "normal"
+
+    # Pulsar la pestana la selecciona y la subraya; la otra deja de estarlo.
+    p["etiqueta"].event_generate("<Button-1>")
+    ventana.update()
+    assert ventana.tabs.select() == str(pagina)
+    principal = barra.pestanas[ventana.tabs.tabs()[0]]
+    assert p["subrayado"].cget("bg") == tema.PALETA.pestanas.subrayado
+    assert principal["subrayado"].cget("bg") != tema.PALETA.pestanas.subrayado
+    ventana.tabs.select(0)
+
+    ventana.reset_state()
+    assert not p["contador"].winfo_ismapped() and barra.texto_completo(pagina) == "Filas Excel no asignadas"
+
+
+def test_jg_asignado_y_candidatos_con_el_mismo_ancho(ventana):
+    _analizar(ventana)
+    ventana.update()
+    tree = ventana.tree_main
+    assert int(tree.column("jg", "width")) == int(tree.column("jg_candidates", "width"))
+    ventana.geometry("1900x860+0+0")
+    ventana.update()
+    assert int(tree.column("jg", "width")) == int(tree.column("jg_candidates", "width"))
+    ventana.geometry("1500x860+0+0")
+    ventana.update()
+
+
+def test_tooltip_sobre_los_candidatos(ventana):
+    from procesardc import tooltip
+
+    _analizar(ventana, excel="DATOS JG2.xlsx")
+    tree = ventana.tree_main
+    tip = ventana.tooltip_candidatos
+    con = next(i for i in tree.get_children() if ventana.main_row_by_iid[i].candidatos)
+
+    def esperar_pausa():
+        limite = time.monotonic() + tooltip.RETARDO_MS / 1000 + 1
+        while not tip.visible and time.monotonic() < limite:
+            ventana.update()
+            time.sleep(0.02)
+
+    ventana._cursor_sobre_candidatos(_evento(ventana, con, "jg_candidates"))
+    assert not tip.visible  # aparece tras una breve pausa
+    esperar_pausa()
+    assert tip.visible and tip.texto == "Pulsa para asignar"
+
+    # Fuera de los candidatos se oculta y no vuelve a aparecer.
+    ventana._cursor_sobre_candidatos(_evento(ventana, con, "fecha"))
+    assert not tip.visible
+    esperar_pausa()
+    assert not tip.visible
+
+
+def test_dialogo_de_asignacion_muestra_la_pagina(ventana, monkeypatch):
+    _analizar(ventana)
+    llamadas = []
+
+    def falso(parent, mensaje, valor_inicial="", imagen=None, fuente=None, validar=None):
+        llamadas.append((mensaje, valor_inicial, imagen, validar))
+        return "5283"
+
+    monkeypatch.setattr(app_mod.dialogo_jg, "pedir_jg", falso)
+    tree = ventana.tree_main
+    iid = tree.get_children()[2]
+    pagina = ventana.main_row_by_iid[iid].pagina.page_number
+    ventana._on_main_double_click(_evento(ventana, iid))
+
+    mensaje, _valor, imagen, validar = llamadas[0]
+    assert validar == ventana._error_jg_manual  # el dialogo comprueba que el JG existe
+    assert mensaje == (
+        f"Indique el número de JG al que quiere asignar este Justificante de Pago (página {pagina})."
+    )
+    # La pagina del justificante, dibujada al ancho previsto con su proporcion (apaisada).
+    assert imagen is not None and imagen.width() == app_mod.ANCHO_VISTA_JP
+    assert imagen.height() < imagen.width()
+    assert ventana.main_row_by_iid[tree.get_children()[2]].jg_manual == "5283"
+
+
+def test_dialogo_jg_botones_y_validacion(ventana):
+    from procesardc.dialogo_jg import DialogoJG
+
+    def abrir(valor="", validar=None):
+        d = DialogoJG(ventana, "Mensaje", valor, validar=validar)
+        ventana.update()
+        return d
+
+    d = abrir("5270")
+    assert not hasattr(d, "boton_quitar")  # ya no hay boton "Quitar asignacion"
+    d.valor.set(" 6743 ")
+    d.boton_asignar.invoke()
+    assert d.resultado == "6743"
+
+    d = abrir("5270")
+    d.boton_cancelar.invoke()
+    assert d.resultado is None
+
+    # Con un JG que no existe, el dialogo sigue abierto y avisa en rojo; al corregirlo se acepta.
+    d = abrir("", validar=lambda texto: "" if texto == "5270" else "No existe")
+    d.valor.set("9999")
+    d.boton_asignar.invoke()
+    assert d.winfo_exists() and d.resultado is None and str(d.error["text"]) == "No existe"
+    d.valor.set("5270")
+    assert str(d.error["text"]) == ""  # el aviso se borra al escribir
+    d.boton_asignar.invoke()
+    assert d.resultado == "5270"
+
+    # Vaciar el campo y asignar quita la asignacion (no se valida).
+    d = abrir("5270", validar=lambda texto: "No existe")
+    d.valor.set("")
+    d.boton_asignar.invoke()
+    assert d.resultado == ""
+
+
+def test_jg_manual_debe_existir_en_el_dc(ventana):
+    _analizar(ventana)  # Excel DATOS JG.xlsx y documentacion con los JG 5270 y 5283
+    error = app_mod.ERROR_JG_NO_EXISTE
+    assert error == "Ese número de JG no existe en este Documento Contable"
+    assert ventana._error_jg_manual("5270") == ""
+    assert ventana._error_jg_manual("2026/0005283") == ""  # cualquier formato del mismo numero
+    assert ventana._error_jg_manual("05270-26") == ""
+    assert ventana._error_jg_manual("99999") == error  # no esta en el Excel
+    assert ventana._error_jg_manual("abc") == error
+    # Esta en el Excel pero no entre los JG de la documentacion cargada.
+    otro = next(
+        n for n in (app_mod.id_numerico_jg(app_mod.normalizar_jg_manual(f.jg)) for f in ventana.excel_data)
+        if n not in ventana.origin_scan.ids_jg
+    )
+    assert ventana._error_jg_manual(otro) == error

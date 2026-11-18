@@ -142,3 +142,55 @@ def test_limpiar_asignacion_manual_devuelve_el_jg_automatico(app_sin_ui):
     _marcar(app_sin_ui)
     assert fila.jg_efectivo == automatico
     assert len(app_sin_ui.excel_unassigned_results) == no_asignadas_antes
+
+
+# --- JG deducido del concepto (caso real: "(2446-26)" por 24446) -------------
+
+
+def _pagina(concepto: str):
+    from decimal import Decimal
+
+    from procesardc.modelos import PdfPageData
+
+    return PdfPageData("JP.pdf", 16, "05-11-2026", Decimal("100.00"), "F-1", "ACME SL", concepto)
+
+
+def _fila(jg: str, concepto: str, fila: int = 2):
+    from decimal import Decimal
+
+    from procesardc.modelos import ExcelRowData
+
+    return ExcelRowData(fila, f"2026/{jg:0>12}", "05-11-2026", Decimal("100.00"), Decimal("0"),
+                        "F-1", "ACME SL", concepto)
+
+
+def test_jg_del_concepto_inexistente_no_se_propone():
+    from procesardc.cruce import analizar as cruzar
+    from procesardc.modelos import Resaltado
+
+    concepto = "PIBD(2446-26) MATERIAL"
+    (r,) = cruzar([_pagina(concepto)], [_fila("24446", concepto)])
+    assert r.jg_automatico == "24446"
+    assert r.jg_probable == ""
+    assert r.candidatos == []
+    assert r.resaltado == Resaltado.NINGUNO
+
+
+def test_jg_del_concepto_existente_y_distinto_se_propone_en_rojo():
+    from procesardc.cruce import analizar as cruzar
+    from procesardc.modelos import Resaltado
+
+    concepto = "PIBD(2446-26) MATERIAL"
+    filas = [_fila("24446", concepto), _fila("2446", "OTRA COSA", fila=3)]
+    (r,) = cruzar([_pagina(concepto)], filas)
+    assert r.jg_automatico == "24446"
+    assert r.candidatos == ["2446"]
+    assert r.resaltado == Resaltado.ROJO
+
+
+def test_coincidencia_exacta_sin_jg_probable_no_repite_candidato():
+    from procesardc.cruce import analizar as cruzar
+
+    (r,) = cruzar([_pagina("MATERIAL")], [_fila("24446", "MATERIAL")])
+    assert r.jg_automatico == "24446"
+    assert r.candidatos == []

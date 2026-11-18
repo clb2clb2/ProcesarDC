@@ -13,6 +13,7 @@ from tkinter import ttk
 
 import sv_ttk
 
+from .pestanas import EstiloPestanas
 from .zona_soltar import DESHABILITADA, ENCIMA, NORMAL, EstiloZona
 
 # Fuentes que define sv-ttk al cargarse.
@@ -34,6 +35,7 @@ class Paleta:
     duplicado_texto: str
     duplicado_fondo: str
     zonas: dict[str, EstiloZona]  # zonas de carga: normal, encima (raton o fichero) y deshabilitada
+    pestanas: EstiloPestanas  # fila de pestanas de los resultados
 
 
 PALETA = Paleta(
@@ -43,6 +45,15 @@ PALETA = Paleta(
     error="#c42b1c",
     duplicado_texto="#ffffff",
     duplicado_fondo="#c42b1c",
+    pestanas=EstiloPestanas(
+        fondo="#fafafa",
+        texto="#1c1c1c",
+        texto_inactiva="#5f6b7a",
+        texto_encima="#1c1c1c",
+        subrayado="#005fb8",
+        linea_base="#dcdcdc",
+        contador="#c42b1c",
+    ),
     zonas={
         NORMAL: EstiloZona(
             fondo_exterior="#fafafa",

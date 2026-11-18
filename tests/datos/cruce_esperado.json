@@ -225,7 +225,7 @@
     "pagina": 23,
     "estado": "found",
     "jg": "6743",
-    "candidatos": "6743",
+    "candidatos": "",
     "color": "",
     "probable": "",
     "origen_probable": "",
@@ -487,7 +487,7 @@
     "pagina": 23,
     "estado": "found",
     "jg": "6743",
-    "candidatos": "6743",
+    "candidatos": "",
     "color": "",
     "probable": "",
     "origen_probable": "",
@@ -528,7 +528,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6926",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -538,7 +538,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7061",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -548,7 +548,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6731",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -558,7 +558,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7063",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -568,7 +568,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7058",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -578,7 +578,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6578",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -588,7 +588,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6579",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -598,7 +598,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5283",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -608,7 +608,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5270",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -618,7 +618,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5413",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -628,7 +628,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6303",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -638,7 +638,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6586",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -648,7 +648,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6999",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -658,7 +658,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6519",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -668,7 +668,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7000",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -678,7 +678,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6998",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -688,7 +688,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7006",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -698,7 +698,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5768",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -708,7 +708,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5953",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -718,7 +718,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5962",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -728,7 +728,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6614",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -738,7 +738,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6560",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -758,7 +758,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6879",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -768,7 +768,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6890",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    }
@@ -809,7 +809,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7106",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -819,7 +819,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7081",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -829,7 +829,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7417",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -839,7 +839,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7110",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -849,7 +849,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7126",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -859,7 +859,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7130",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -879,7 +879,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7412",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -889,7 +889,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7112",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -899,7 +899,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7069",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -909,7 +909,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7143",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -919,7 +919,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7174",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -929,7 +929,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5961",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -939,7 +939,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5980",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -949,7 +949,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6585",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -959,7 +959,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6289",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -969,7 +969,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "4480",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -989,7 +989,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6831",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -999,7 +999,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7299",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1009,7 +1009,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6979",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1019,7 +1019,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5951",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1039,7 +1039,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6744",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1049,7 +1049,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5712",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    }
@@ -1091,7 +1091,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7106",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1101,7 +1101,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7081",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1111,7 +1111,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7417",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1121,7 +1121,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7110",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1131,7 +1131,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7126",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1141,7 +1141,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7130",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1161,7 +1161,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7412",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1171,7 +1171,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7112",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1181,7 +1181,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7069",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1191,7 +1191,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7143",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1201,7 +1201,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7174",
+    "probable": "",
     "origen_probable": "factura",
     "discrepancias": []
    },
@@ -1211,7 +1211,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5961",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1221,7 +1221,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5980",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1231,7 +1231,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6585",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1241,7 +1241,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6289",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1251,7 +1251,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "4480",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1271,7 +1271,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6831",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1281,7 +1281,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "7299",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1291,7 +1291,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6979",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1301,7 +1301,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5951",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1321,7 +1321,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "6744",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1331,7 +1331,7 @@
     "jg": "",
     "candidatos": "",
     "color": "red",
-    "probable": "5712",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    }
@@ -1431,7 +1431,7 @@
     "pagina": 7,
     "estado": "found",
     "jg": "7125",
-    "candidatos": "7125",
+    "candidatos": "",
     "color": "",
     "probable": "",
     "origen_probable": "",
@@ -1531,9 +1531,9 @@
     "pagina": 17,
     "estado": "found",
     "jg": "4880",
-    "candidatos": "4480",
-    "color": "red",
-    "probable": "4480",
+    "candidatos": "",
+    "color": "",
+    "probable": "",
     "origen_probable": "concepto",
     "discrepancias": []
    },
@@ -1541,7 +1541,7 @@
     "pagina": 18,
     "estado": "found",
     "jg": "7294",
-    "candidatos": "7294",
+    "candidatos": "",
     "color": "",
     "probable": "",
     "origen_probable": "",
@@ -1593,7 +1593,7 @@
     "pagina": 23,
     "estado": "found",
     "jg": "6331",
-    "candidatos": "6331",
+    "candidatos": "",
     "color": "",
     "probable": "",
     "origen_probable": "",

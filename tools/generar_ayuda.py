@@ -28,7 +28,15 @@ def nombre_png(svg: Path, escala: float) -> Path:
 
 
 def tamano_svg(svg: Path) -> tuple[float, float]:
-    caja = re.search(r'viewBox="\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s*"', svg.read_text(encoding="utf-8"))
+    """Tamano nominal (al 100 %): width/height del <svg> si los tiene; si no, su viewBox."""
+    texto = svg.read_text(encoding="utf-8")
+    raiz = re.search(r"<svg\b[^>]*>", texto, flags=re.S)
+    raiz = raiz.group(0) if raiz else ""
+    ancho = re.search(r'\swidth="([\d.]+)(?:px)?"', raiz)
+    alto = re.search(r'\sheight="([\d.]+)(?:px)?"', raiz)
+    if ancho and alto:
+        return float(ancho.group(1)), float(alto.group(1))
+    caja = re.search(r'viewBox="\s*[\d.]+\s+[\d.]+\s+([\d.]+)\s+([\d.]+)\s*"', raiz)
     if not caja:
         sys.exit(f"{svg.name}: no tiene viewBox")
     return float(caja.group(1)), float(caja.group(2))

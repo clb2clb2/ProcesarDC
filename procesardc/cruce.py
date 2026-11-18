@@ -52,6 +52,10 @@ def _resultado_pagina(page: PdfPageData, excel_data: list[ExcelRowData]) -> Resu
     coincidencias = buscar_coincidencias(page, excel_data)
     probable_raw, origen_probable = extraer_jg_probable(page)
     probable = jg_solo_numero(probable_raw)
+    # El JG deducido de la factura o del concepto solo sirve si existe en el Excel: si no,
+    # es una errata del texto del banco (p. ej. "(2446-26)" por 24446) y se ignora.
+    if probable and probable not in {_jg_corto(fila) for fila in excel_data}:
+        probable = ""
     resultado = ResultadoCruce(
         pagina=page,
         estado=Estado.ENCONTRADO,
@@ -66,11 +70,10 @@ def _resultado_pagina(page: PdfPageData, excel_data: list[ExcelRowData]) -> Resu
         if probable and probable == encontrado:
             resultado.resaltado = Resaltado.VERDE
         elif probable and origen_probable == "concepto":
-            # El concepto apunta a otro JG: se propone para revisarlo.
+            # El concepto apunta a otro JG que si existe: se propone para revisarlo.
             resultado.candidatos = [probable]
             resultado.resaltado = Resaltado.ROJO
-        else:
-            resultado.candidatos = [encontrado]
+        # Si no, no hay candidatos: proponer el mismo JG ya asignado no aporta nada.
 
     elif not coincidencias:
         resultado.estado = Estado.NO_ENCONTRADO
